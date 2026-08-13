@@ -62,6 +62,7 @@ function showLanding() {
   liveView.classList.remove('active');
   landingView.classList.add('active');
   accordionRoot.innerHTML = '';
+  stopTimer();
 }
 
 // ================= 핀 고정 질문 선별 (비파괴적) =================
@@ -122,7 +123,7 @@ function openList(mode) {
     bucket.questions.push(q);
   }
 
-  renderAccordion(pinned, categoryOrder, mode);
+  renderAccordion(pinned, categoryOrder);
 
   landingView.classList.remove('active');
   liveView.classList.remove('active');
@@ -130,19 +131,19 @@ function openList(mode) {
   window.scrollTo(0, 0);
 }
 
-function renderAccordion(pinned, categories, mode) {
+function renderAccordion(pinned, categories) {
   accordionRoot.innerHTML = '';
 
   if (pinned.length > 0) {
-    accordionRoot.appendChild(buildCategorySection('🎯 필수 준비 질문', pinned, true, mode));
+    accordionRoot.appendChild(buildCategorySection('🎯 필수 준비 질문', pinned, true));
   }
 
   for (const cat of categories) {
-    accordionRoot.appendChild(buildCategorySection(cat.name, cat.questions, false, mode));
+    accordionRoot.appendChild(buildCategorySection(cat.name, cat.questions, false));
   }
 }
 
-function buildCategorySection(title, questions, pinnedStyle, mode) {
+function buildCategorySection(title, questions, pinnedStyle) {
   const section = document.createElement('section');
   section.className = 'category' + (pinnedStyle ? ' category--pinned' : '');
 
@@ -165,17 +166,18 @@ function buildCategorySection(title, questions, pinnedStyle, mode) {
     } else if (!q.subcategory) {
       lastSub = null;
     }
-    list.appendChild(buildQAItem(q, mode));
+    list.appendChild(buildQAItem(q));
   }
 
   section.appendChild(list);
   return section;
 }
 
-// mode: 'full' → fullAnswer가 본문(+summaryKeywords는 참고용 태그), 수정 대상은 fullAnswer
-// mode: 'summary' → summaryKeywords만 본문으로 보여주고, 수정 대상도 summaryKeywords
-function buildQAItem(q, mode) {
-  const field = mode === 'full' ? 'fullAnswer' : 'summaryKeywords';
+// 풀버전/요약버전 모두 같은 구조로 보여준다: 키워드(작게, 위) → 전체 답변(아래).
+// 두 화면의 차이는 "어떤 질문들을 보여주는가"(요약버전은 starred만)일 뿐,
+// 한 질문을 펼쳤을 때 보이는 내용 자체는 동일하다. 수정 대상은 항상 fullAnswer.
+function buildQAItem(q) {
+  const field = 'fullAnswer';
 
   const item = document.createElement('div');
   item.className = 'qa-item';
@@ -205,18 +207,15 @@ function buildQAItem(q, mode) {
   const inner = document.createElement('div');
   inner.className = 'qa-answer__inner';
 
-  // 풀버전에서는 요약 키워드를 참고 태그로 위에 살짝 보여주고, 본문은 fullAnswer.
-  // 요약버전에서는 summaryKeywords 자체가 본문이라 별도 태그 없이 한 번만 보여준다.
-  let keywordsEl = null;
-  if (mode === 'full' && q.summaryKeywords) {
-    keywordsEl = document.createElement('p');
-    keywordsEl.className = 'qa-keywords';
-    keywordsEl.textContent = q.summaryKeywords;
-    inner.appendChild(keywordsEl);
-  }
+  // 키워드를 작은 태그로 먼저 보여주고, 그 아래 전체 답변 문장을 보여준다.
+  const keywordsEl = document.createElement('p');
+  keywordsEl.className = 'qa-keywords';
+  keywordsEl.textContent = q.summaryKeywords || '';
+  keywordsEl.hidden = !q.summaryKeywords;
+  inner.appendChild(keywordsEl);
 
   const bodyEl = document.createElement('p');
-  bodyEl.className = mode === 'full' ? 'qa-answer-text' : 'qa-keywords';
+  bodyEl.className = 'qa-answer-text';
   bodyEl.textContent = q[field] || '';
   bodyEl.hidden = !q[field];
   inner.appendChild(bodyEl);
@@ -284,7 +283,7 @@ function buildQAItem(q, mode) {
     e.stopPropagation();
     textarea.value = bodyEl.textContent;
     bodyEl.hidden = true;
-    if (keywordsEl) keywordsEl.hidden = true;
+    keywordsEl.hidden = true;
     actions.hidden = true;
     editBox.hidden = false;
     textarea.focus();
@@ -294,7 +293,7 @@ function buildQAItem(q, mode) {
     editBox.hidden = true;
     actions.hidden = false;
     bodyEl.hidden = !bodyEl.textContent;
-    if (keywordsEl) keywordsEl.hidden = false;
+    keywordsEl.hidden = !keywordsEl.textContent;
   }
 
   editBtn.addEventListener('click', enterEditMode);
@@ -429,6 +428,7 @@ function buildLiveInterviewOrder() {
 const liveStage = document.getElementById('live-stage');
 const liveEnd = document.getElementById('live-end');
 const liveProgress = document.getElementById('live-progress');
+const liveTimer = document.getElementById('live-timer');
 const liveQuestionText = document.getElementById('live-question-text');
 const liveAnswerRow = document.getElementById('live-answer-row');
 const liveAnswerKeywords = document.getElementById('live-answer-keywords');
@@ -436,6 +436,32 @@ const liveAnswerText = document.getElementById('live-answer-text');
 const liveHint = document.getElementById('live-hint');
 
 let liveSession = null; // { intro, questions, index, revealed }
+
+// ---- 스톱워치: 질문이 뜨면 0초부터 시작, 답변을 펼치면 멈추고, 다음 질문으로
+// 넘어가면 다시 0초부터 시작한다. ----
+let timerIntervalId = null;
+let timerSeconds = 0;
+
+function renderTimer() {
+  liveTimer.textContent = timerSeconds + '초';
+}
+
+function startTimer() {
+  stopTimer();
+  timerSeconds = 0;
+  renderTimer();
+  timerIntervalId = setInterval(() => {
+    timerSeconds += 1;
+    renderTimer();
+  }, 1000);
+}
+
+function stopTimer() {
+  if (timerIntervalId) {
+    clearInterval(timerIntervalId);
+    timerIntervalId = null;
+  }
+}
 
 document.getElementById('btn-live').addEventListener('click', startLiveInterview);
 document.getElementById('btn-live-restart').addEventListener('click', startLiveInterview);
@@ -455,6 +481,7 @@ function startLiveInterview() {
   window.scrollTo(0, 0);
 
   renderLiveStep();
+  startTimer();
 }
 
 function currentLiveStep() {
@@ -463,11 +490,11 @@ function currentLiveStep() {
     return {
       question: '먼저 간단하게 자기소개 부탁드립니다.',
       keywords: intro ? intro.summaryKeywords : '',
-      answer: '',
+      answer: intro ? intro.fullAnswer : '',
     };
   }
   const q = questions[index - 1];
-  return { question: toSpokenQuestion(q.question), keywords: q.summaryKeywords, answer: '' };
+  return { question: toSpokenQuestion(q.question), keywords: q.summaryKeywords, answer: q.fullAnswer };
 }
 
 function renderLiveStep() {
@@ -506,9 +533,16 @@ function handleLiveTap() {
   if (!liveSession) return;
   if (!liveSession.revealed) {
     liveSession.revealed = true;
+    stopTimer();
+    renderLiveStep();
   } else {
     liveSession.index += 1;
     liveSession.revealed = false;
+    renderLiveStep();
+    if (liveSession.index < liveSession.questions.length + 1) {
+      startTimer();
+    } else {
+      stopTimer(); // 마지막 질문까지 끝났으면 타이머 정지
+    }
   }
-  renderLiveStep();
 }

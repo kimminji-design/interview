@@ -521,6 +521,23 @@ body {
   border-radius: 999px;
 }
 
+.live-timer {
+  position: absolute;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: rgba(15, 17, 32, 0.55);
+  backdrop-filter: blur(6px);
+  padding: 6px 24px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+
 .live-bubble {
   margin-top: auto;
   width: 100%;
