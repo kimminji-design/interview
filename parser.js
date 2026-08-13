@@ -23,6 +23,7 @@ function parseInterviewText(raw) {
   let currentCategory = null;
   let currentSubcategory = null;
   let currentQA = null;
+  let pendingStar = false; // 직전 줄이 "⭐⭐"만 있는 별도 줄이었는지
 
   const STAR_ONLY = /^⭐+$/;
   const CATEGORY_EMOJI = /^(?:🔴|🟡)\s*(.*)$/;
@@ -54,6 +55,7 @@ function parseInterviewText(raw) {
       answer,
       subcategory: currentQA.subcategory || null,
       isPseudo: !!currentQA.isPseudo,
+      starred: !!currentQA.starred,
     });
     currentQA = null;
   }
@@ -62,16 +64,19 @@ function parseInterviewText(raw) {
     const line = rawLine.trim();
 
     if (line === '') {
+      pendingStar = false;
       finalizeQA();
       continue;
     }
 
     if (STAR_ONLY.test(line)) {
+      pendingStar = true;
       continue;
     }
 
     const catMatch = line.match(CATEGORY_EMOJI);
     if (catMatch) {
+      pendingStar = false;
       finalizeQA();
       let name = catMatch[1].trim().replace(/^\d+\.\s*/, '');
       ensureCategory(name || '기타');
@@ -80,6 +85,7 @@ function parseInterviewText(raw) {
 
     const subMatch = line.match(BRACKET_SUB);
     if (subMatch) {
+      pendingStar = false;
       finalizeQA();
       currentSubcategory = subMatch[1].trim();
       continue;
@@ -94,6 +100,7 @@ function parseInterviewText(raw) {
       numMatch[2].length < 20 &&
       !numMatch[2].includes('?')
     ) {
+      pendingStar = false;
       currentCategory.name = numMatch[2].trim();
       currentSubcategory = null;
       continue;
@@ -101,6 +108,11 @@ function parseInterviewText(raw) {
 
     if (line.includes('**')) {
       finalizeQA();
+      const beforeMarker = line.slice(0, line.indexOf('**')).trim();
+      const inlineStarred = beforeMarker.length > 0 && /^⭐+$/.test(beforeMarker);
+      const starred = pendingStar || inlineStarred;
+      pendingStar = false;
+
       let q = line.slice(line.indexOf('**') + 2).trim();
       let inlineKeywords = null;
 
@@ -118,11 +130,13 @@ function parseInterviewText(raw) {
         answerLines: [],
         subcategory: currentSubcategory,
         isPseudo: false,
+        starred,
       };
       continue;
     }
 
     // 일반 본문 줄
+    pendingStar = false;
     if (currentQA) {
       if (currentQA.keywords === null && /^\(.*\)$/.test(line)) {
         currentQA.keywords = line.slice(1, -1).trim();
@@ -142,6 +156,7 @@ function parseInterviewText(raw) {
           answerLines: [line],
           subcategory: currentSubcategory,
           isPseudo: true,
+          starred: false,
         };
       }
     }

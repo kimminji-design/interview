@@ -328,6 +328,113 @@ body {
   white-space: pre-wrap;
 }
 
+/* ---------- 답변 수정 ---------- */
+.qa-question__text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.qa-edited-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pinned-accent);
+}
+
+.qa-actions[hidden],
+.qa-edit-box[hidden] {
+  display: none;
+}
+
+.qa-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.qa-action-btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.qa-action-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.qa-action-btn--revert:hover {
+  border-color: var(--pinned-accent);
+  color: var(--pinned-accent);
+}
+
+.qa-edit-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.qa-edit-textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  font-family: inherit;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--text);
+  resize: vertical;
+}
+
+.qa-edit-textarea:focus {
+  outline: none;
+}
+
+.qa-edit-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.qa-save-btn,
+.qa-cancel-btn {
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.qa-save-btn {
+  background: var(--accent);
+  color: #fff;
+}
+
+.qa-save-btn:hover {
+  opacity: 0.9;
+}
+
+.qa-cancel-btn {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+.qa-cancel-btn:hover {
+  color: var(--text);
+}
+
 /* ---------- Landing: 실전 면접 진입 버튼 ---------- */
 .mode-btn--live {
   background: linear-gradient(135deg, #2c3358, #171b30);

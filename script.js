@@ -64,19 +64,65 @@ function showLanding() {
   accordionRoot.innerHTML = '';
 }
 
+// ================= 핀 고정 질문 선별 (비파괴적) =================
+// "1분 자기소개"는 항상 맨 앞, 그 다음 5개(성격/강점/약점/협업갈등/지원동기)는
+// 매번 순서를 섞어서 앞쪽에 배치한다. 원본 배열은 건드리지 않고 id만 골라낸다.
+const INTRO_PATTERNS = [(q) => q.question.includes('1분') && q.question.includes('자기소개')];
+const SPECIAL_SLOTS = [
+  { patterns: [(q) => q.question.includes('성격') && q.question.includes('장') && q.question.includes('단')] },
+  { patterns: [(q) => q.question.includes('강점')] },
+  { patterns: [(q) => q.question.includes('약점')] },
+  {
+    patterns: [
+      (q) => q.question.includes('개발자') && q.question.includes('충돌'),
+      (q) => q.question.includes('충돌') && q.question.includes('경험'),
+      (q) => q.question.includes('갈등') && q.question.includes('경험'),
+    ],
+  },
+  { patterns: [(q) => q.question.includes('이직') && q.question.includes('이유')] },
+];
+
+function pickPinned(questions) {
+  const used = new Set();
+  function findFirst(patterns) {
+    for (const pattern of patterns) {
+      const found = questions.find((q) => !used.has(q.id) && pattern(q));
+      if (found) {
+        used.add(found.id);
+        return found;
+      }
+    }
+    return null;
+  }
+  const intro = findFirst(INTRO_PATTERNS);
+  const specials = SPECIAL_SLOTS.map((slot) => findFirst(slot.patterns)).filter(Boolean);
+  return { intro, specials, usedIds: used };
+}
+
 function openList(mode) {
-  const raw = mode === 'full' ? RAW_FULL : RAW_SUMMARY;
+  const questions = getEditedQuestions().filter((q) => mode === 'full' || q.starred);
   listTitle.textContent = mode === 'full' ? '풀버전 연습' : '요약버전 연습';
 
-  const categories = parseInterviewText(raw);
-  const { intro, specials, categories: rest } = extractSpecialQuestions(categories);
-
+  const { intro, specials, usedIds } = pickPinned(questions);
   const pinned = [];
   if (intro) pinned.push(intro);
   pinned.push(...shuffle(specials));
 
-  // 카테고리 자체의 배치 순서는 데이터에 정의된 순서를 그대로 고정 노출한다.
-  renderAccordion(pinned, rest);
+  // 카테고리 순서는 데이터에 등장하는 원래 순서를 그대로 유지한다 (랜덤 셔플 없음).
+  const categoryOrder = [];
+  const categoryMap = new Map();
+  for (const q of questions) {
+    if (usedIds.has(q.id)) continue;
+    let bucket = categoryMap.get(q.category);
+    if (!bucket) {
+      bucket = { name: q.category, questions: [] };
+      categoryMap.set(q.category, bucket);
+      categoryOrder.push(bucket);
+    }
+    bucket.questions.push(q);
+  }
+
+  renderAccordion(pinned, categoryOrder, mode);
 
   landingView.classList.remove('active');
   liveView.classList.remove('active');
@@ -84,19 +130,19 @@ function openList(mode) {
   window.scrollTo(0, 0);
 }
 
-function renderAccordion(pinned, categories) {
+function renderAccordion(pinned, categories, mode) {
   accordionRoot.innerHTML = '';
 
   if (pinned.length > 0) {
-    accordionRoot.appendChild(buildCategorySection('🎯 필수 준비 질문', pinned, true));
+    accordionRoot.appendChild(buildCategorySection('🎯 필수 준비 질문', pinned, true, mode));
   }
 
   for (const cat of categories) {
-    accordionRoot.appendChild(buildCategorySection(cat.name, cat.questions, false));
+    accordionRoot.appendChild(buildCategorySection(cat.name, cat.questions, false, mode));
   }
 }
 
-function buildCategorySection(title, questions, pinnedStyle) {
+function buildCategorySection(title, questions, pinnedStyle, mode) {
   const section = document.createElement('section');
   section.className = 'category' + (pinnedStyle ? ' category--pinned' : '');
 
@@ -119,14 +165,18 @@ function buildCategorySection(title, questions, pinnedStyle) {
     } else if (!q.subcategory) {
       lastSub = null;
     }
-    list.appendChild(buildQAItem(q));
+    list.appendChild(buildQAItem(q, mode));
   }
 
   section.appendChild(list);
   return section;
 }
 
-function buildQAItem(q) {
+// mode: 'full' → fullAnswer가 본문(+summaryKeywords는 참고용 태그), 수정 대상은 fullAnswer
+// mode: 'summary' → summaryKeywords만 본문으로 보여주고, 수정 대상도 summaryKeywords
+function buildQAItem(q, mode) {
+  const field = mode === 'full' ? 'fullAnswer' : 'summaryKeywords';
+
   const item = document.createElement('div');
   item.className = 'qa-item';
 
@@ -137,7 +187,9 @@ function buildQAItem(q) {
 
   const qText = document.createElement('span');
   qText.className = 'qa-question__text';
-  qText.textContent = q.question;
+  const qTextLabel = document.createElement('span');
+  qTextLabel.textContent = q.question;
+  qText.appendChild(qTextLabel);
 
   const arrow = document.createElement('span');
   arrow.className = 'qa-arrow';
@@ -153,21 +205,127 @@ function buildQAItem(q) {
   const inner = document.createElement('div');
   inner.className = 'qa-answer__inner';
 
-  if (q.keywords) {
-    const kw = document.createElement('p');
-    kw.className = 'qa-keywords';
-    kw.textContent = q.keywords;
-    inner.appendChild(kw);
+  // 풀버전에서는 요약 키워드를 참고 태그로 위에 살짝 보여주고, 본문은 fullAnswer.
+  // 요약버전에서는 summaryKeywords 자체가 본문이라 별도 태그 없이 한 번만 보여준다.
+  let keywordsEl = null;
+  if (mode === 'full' && q.summaryKeywords) {
+    keywordsEl = document.createElement('p');
+    keywordsEl.className = 'qa-keywords';
+    keywordsEl.textContent = q.summaryKeywords;
+    inner.appendChild(keywordsEl);
   }
 
-  if (q.answer) {
-    const ans = document.createElement('p');
-    ans.className = 'qa-answer-text';
-    ans.textContent = q.answer;
-    inner.appendChild(ans);
-  }
+  const bodyEl = document.createElement('p');
+  bodyEl.className = mode === 'full' ? 'qa-answer-text' : 'qa-keywords';
+  bodyEl.textContent = q[field] || '';
+  bodyEl.hidden = !q[field];
+  inner.appendChild(bodyEl);
+
+  const actions = document.createElement('div');
+  actions.className = 'qa-actions';
+
+  const editBtn = document.createElement('button');
+  editBtn.type = 'button';
+  editBtn.className = 'qa-action-btn qa-action-btn--edit';
+  editBtn.textContent = '✏️ 수정';
+
+  const revertBtn = document.createElement('button');
+  revertBtn.type = 'button';
+  revertBtn.className = 'qa-action-btn qa-action-btn--revert';
+  revertBtn.textContent = '↺ 원본으로 되돌리기';
+
+  actions.appendChild(editBtn);
+  actions.appendChild(revertBtn);
+  inner.appendChild(actions);
+
+  const editBox = document.createElement('div');
+  editBox.className = 'qa-edit-box';
+  editBox.hidden = true;
+
+  const textarea = document.createElement('textarea');
+  textarea.className = 'qa-edit-textarea';
+
+  const editButtons = document.createElement('div');
+  editButtons.className = 'qa-edit-buttons';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'qa-cancel-btn';
+  cancelBtn.textContent = '취소';
+
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.className = 'qa-save-btn';
+  saveBtn.textContent = '저장';
+
+  editButtons.appendChild(cancelBtn);
+  editButtons.appendChild(saveBtn);
+  editBox.appendChild(textarea);
+  editBox.appendChild(editButtons);
+  inner.appendChild(editBox);
 
   panel.appendChild(inner);
+
+  function syncEditedState() {
+    const edited = hasOverride(q.id, field);
+    revertBtn.style.display = edited ? '' : 'none';
+    let dot = qText.querySelector('.qa-edited-dot');
+    if (edited && !dot) {
+      dot = document.createElement('span');
+      dot.className = 'qa-edited-dot';
+      dot.title = '수정된 답변';
+      qText.appendChild(dot);
+    } else if (!edited && dot) {
+      dot.remove();
+    }
+  }
+
+  function enterEditMode(e) {
+    e.stopPropagation();
+    textarea.value = bodyEl.textContent;
+    bodyEl.hidden = true;
+    if (keywordsEl) keywordsEl.hidden = true;
+    actions.hidden = true;
+    editBox.hidden = false;
+    textarea.focus();
+  }
+
+  function exitEditMode() {
+    editBox.hidden = true;
+    actions.hidden = false;
+    bodyEl.hidden = !bodyEl.textContent;
+    if (keywordsEl) keywordsEl.hidden = false;
+  }
+
+  editBtn.addEventListener('click', enterEditMode);
+
+  cancelBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    exitEditMode();
+  });
+
+  saveBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const value = textarea.value.trim();
+    setQuestionOverride(q.id, field, value);
+    q[field] = value;
+    bodyEl.textContent = value;
+    exitEditMode();
+    syncEditedState();
+  });
+
+  revertBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    clearQuestionOverrideField(q.id, field);
+    const base = findBaseQuestion(q.id);
+    const original = base ? base[field] : '';
+    q[field] = original;
+    bodyEl.textContent = original || '';
+    bodyEl.hidden = !original;
+    syncEditedState();
+  });
+
+  syncEditedState();
 
   btn.addEventListener('click', () => {
     const isOpen = item.classList.toggle('open');
@@ -179,44 +337,88 @@ function buildQAItem(q) {
   return item;
 }
 
+// 실전 면접 화면에는 데이터에 저장된 명사형 질문 라벨(예: "이직하는 이유")을
+// 그대로 쓰지 않고, 면접관이 실제로 말하는 듯한 구어체 질문으로 바꿔서 보여준다.
+// 학습 모드(아코디언)의 질문 표기는 원본 그대로 유지하므로 여기서만 사용한다.
+const LIVE_QUESTION_PHRASING = {
+  '본인의 가장 큰 강점은 무엇인가': '본인의 가장 큰 강점은 무엇인가요?',
+  '본인의 약점이나 보완이 필요한 부분은 무엇인가': '본인의 약점이나 보완이 필요한 부분은 무엇인가요?',
+  '이직하는 이유': '이직하려는 이유는 무엇인가요?',
+  '데이터 기반 디자인 경험이 상대적으로 부족한데, 프로덕트 디자이너 역할을 잘할 수 있나':
+    '데이터 기반 디자인 경험이 상대적으로 부족하신 것 같은데, 프로덕트 디자이너 역할을 잘 해내실 수 있을까요?',
+  '성격의 장단점': '본인 성격의 장단점을 말씀해주세요.',
+  '포트폴리오에서 가장 자신 있는 프로젝트는 무엇인가': '포트폴리오에서 가장 자신 있는 프로젝트는 무엇인가요?',
+  '가장 아쉬웠던 프로젝트는 무엇인가 / 실패했다고 생각하는 경험 / 잘못 판단했던 경험 / 부족했던 경험이 있나':
+    '가장 아쉬웠던 프로젝트, 혹은 실패했다고 생각하는 경험이 있다면 말씀해주세요.',
+  '개발자와 디자인 구현 방식이 충돌했던 경험은?': '개발자와 디자인 구현 방식이 충돌했던 경험이 있으신가요?',
+  '왜 폴라리스오피스인가': '폴라리스오피스를 선택하신 이유가 무엇인가요?',
+  '폴라리스오피스를 직접 사용해봤나': '폴라리스오피스를 직접 사용해보셨나요?',
+  '사용하면서 가장 좋았던 기능은 무엇인가': '사용하시면서 가장 좋았던 기능은 무엇인가요?',
+  '가장 불편했던 부분 / 본인이라면 가장 먼저 개선하고 싶은 것':
+    '가장 불편했던 부분이나, 본인이라면 가장 먼저 개선하고 싶은 점을 말씀해주세요.',
+  '왜 Core → Sub → Nudge 구조를 만들었나': 'Core → Sub → Nudge 구조는 왜 만드셨나요?',
+  'Core / Sub / Nudge를 각각 어떻게 정의했나': 'Core, Sub, Nudge는 각각 어떻게 정의하셨나요?',
+  '각 그룹사가 자기 서비스를 더 보여달라고 하면 어떻게 설득했나':
+    '각 그룹사가 자기 서비스를 더 보여달라고 요청하면 어떻게 설득하셨나요?',
+  '실제 사용자 테스트 없이 학습 효과가 있다고 말할 수 있나': '실제 사용자 테스트 없이도 학습 효과가 있다고 말씀하실 수 있나요?',
+  '현재 업무에서 AI를 얼마나·어떻게 활용하고 있나': '현재 업무에서 AI를 얼마나, 어떻게 활용하고 계신가요?',
+  '입사 후 폴라리스오피스 업무에 AI를 어떻게 활용해보고 싶은가':
+    '입사 후에는 폴라리스오피스 업무에 AI를 어떻게 활용해보고 싶으신가요?',
+  MBTI: 'MBTI가 어떻게 되세요?',
+  '스트레스는 어떻게 해소하나': '스트레스는 어떻게 해소하시나요?',
+  '어떤 디자이너가 되고 싶은가 (최종)': '앞으로 어떤 디자이너가 되고 싶으신가요?',
+  연봉: '희망하시는 연봉을 말씀해주세요.',
+  '입사 가능 시점': '입사 가능하신 시점이 언제쯤인가요?',
+  // "마무리" 카테고리는 "궁금한 점이 있는지" 하나로, "인사" 카테고리는
+  // "마지막으로 하고 싶은 말" 하나로 통합되어 있다 (store.js의 consolidateClosingSections).
+  '궁금한 점이 있는지': '그 밖에 저희에게 궁금하신 점이 있다면 편하게 말씀해주세요.',
+  '마지막으로 하고 싶은 말': '마지막으로 하고 싶은 말씀이 있다면 해주세요.',
+};
+
+function toSpokenQuestion(text) {
+  if (LIVE_QUESTION_PHRASING[text]) return LIVE_QUESTION_PHRASING[text];
+  const trimmed = text.trim();
+  // 매핑에 없는 질문이 추가되더라도 최소한 자연스러운 구어체 종결형으로 보이도록 하는 보정.
+  if (/[?？]$/.test(trimmed)) return trimmed;
+  if (/(나요|가요|까요|세요|주세요|습니다|니다)$/.test(trimmed)) return trimmed;
+  return trimmed + '에 대해 말씀해주세요.';
+}
+
 // ================= 실전 면접 모드 =================
-// 요약버전(RAW_SUMMARY) 데이터를 사용한다. "1분 자기소개"는 항상 맨 처음 질문으로
-// 고정하고, 그 이후 질문들은 실제 면접에서 자연스러운 큰 흐름
-// (지원동기 → 직무/경험 → 프로젝트·포트폴리오 → 문제해결/역량 →
-//  폴라리스오피스 정합성 → 처우·컬처핏 → 마무리) 순서의 "구간(스테이지)"으로
-// 먼저 묶은 뒤, 각 구간 내부에서만 순서를 섞는 준랜덤 방식을 사용한다.
-// 이렇게 하면 매번 세부 순서는 달라지지만 완전 무작위로 인한 흐름 붕괴는 피할 수 있다.
+// "1분 자기소개"는 항상 맨 처음 질문으로 고정하고, 그 이후 질문들은 실제 면접에서
+// 자연스러운 큰 흐름(지원동기 → 직무/경험 → 프로젝트·포트폴리오 → 문제해결/역량 →
+// 폴라리스오피스 정합성 → 처우·컬처핏 → 마무리) 순서의 "구간(스테이지)"으로 먼저
+// 묶은 뒤, 각 구간 내부에서만 순서를 섞는 준랜덤 방식을 사용한다. 요약 키워드
+// (starred=true인 핵심 질문)만 대상으로 하며, 매번 세부 순서는 달라지지만 완전
+// 무작위로 인한 흐름 붕괴는 피할 수 있다.
 const LIVE_STAGE_MATCHERS = [
-  (cat, q) => q.question.includes('이직') && q.question.includes('이유'),
-  (cat) => cat.name.includes('자기소개'),
-  (cat) => cat.name.includes('포트폴리오') || cat.name.includes('우리WON뱅킹'),
-  (cat) => cat.name.includes('협업') || cat.name.includes('AI Heuristic'),
-  (cat) => cat.name.includes('폴라리스오피스 적합성'),
-  (cat) => cat.name.includes('방향만 메모'),
+  (q) => q.question.includes('이직') && q.question.includes('이유'),
+  (q) => q.category.includes('자기소개'),
+  (q) => q.category.includes('포트폴리오') || q.category.includes('우리WON뱅킹'),
+  (q) => q.category.includes('협업') || q.category.includes('AI Heuristic'),
+  (q) => q.category.includes('폴라리스오피스 적합성'),
+  (q) => q.category.includes('방향만 메모'),
 ];
 
 function buildLiveInterviewOrder() {
-  const categories = parseInterviewText(RAW_SUMMARY);
+  const starred = getEditedQuestions().filter((q) => q.starred);
 
   let intro = null;
-  for (const cat of categories) {
-    const idx = cat.questions.findIndex(
-      (q) => q.question.includes('1분') && q.question.includes('자기소개')
-    );
-    if (idx !== -1) {
-      intro = cat.questions.splice(idx, 1)[0];
-      break;
+  const rest = [];
+  for (const q of starred) {
+    if (!intro && q.question.includes('1분') && q.question.includes('자기소개')) {
+      intro = q;
+    } else {
+      rest.push(q);
     }
   }
 
   const stages = LIVE_STAGE_MATCHERS.map(() => []);
   const fallback = []; // 마무리·인사 등 위 흐름에 속하지 않는 나머지 (항상 마지막)
 
-  for (const cat of categories) {
-    for (const q of cat.questions) {
-      const stageIdx = LIVE_STAGE_MATCHERS.findIndex((m) => m(cat, q));
-      (stageIdx === -1 ? fallback : stages[stageIdx]).push(q);
-    }
+  for (const q of rest) {
+    const stageIdx = LIVE_STAGE_MATCHERS.findIndex((m) => m(q));
+    (stageIdx === -1 ? fallback : stages[stageIdx]).push(q);
   }
   stages.push(fallback);
 
@@ -260,12 +462,12 @@ function currentLiveStep() {
   if (index === 0) {
     return {
       question: '먼저 간단하게 자기소개 부탁드립니다.',
-      keywords: intro ? intro.keywords : '',
-      answer: intro ? intro.answer : '',
+      keywords: intro ? intro.summaryKeywords : '',
+      answer: '',
     };
   }
   const q = questions[index - 1];
-  return { question: q.question, keywords: q.keywords, answer: q.answer };
+  return { question: toSpokenQuestion(q.question), keywords: q.summaryKeywords, answer: '' };
 }
 
 function renderLiveStep() {
@@ -290,6 +492,7 @@ function renderLiveStep() {
     liveAnswerKeywords.textContent = step.keywords || '';
     liveAnswerKeywords.style.display = hasKeywords ? '' : 'none';
     liveAnswerText.textContent = step.answer || '';
+    liveAnswerText.style.display = step.answer ? '' : 'none';
     liveAnswerRow.hidden = false;
     liveHint.textContent =
       index + 1 < total ? '탭하면 다음 질문으로 넘어가요' : '탭하면 면접이 종료돼요';
