@@ -30,22 +30,35 @@
   </div>
 </div>
 
+<div id="company-view" class="view">
+  <div class="company-select">
+    <h1 class="company-select__title">기업 선택</h1>
+    <p class="company-select__desc">면접을 연습할 기업을 선택하세요.</p>
+    <div id="company-list" class="company-list"></div>
+    <button id="btn-add-company" class="mode-btn company-add-btn">
+      <span class="mode-btn__label">+ 기업 추가</span>
+    </button>
+  </div>
+</div>
+
 <div id="landing-view" class="view">
   <div class="landing">
+    <button id="btn-change-company" class="back-btn landing__change-company">← 기업 변경</button>
     <h1 class="landing__title">면접 답변 연습</h1>
+    <p id="landing-company-name" class="landing__company-badge"></p>
     <p class="landing__desc">연습할 버전을 선택하세요.</p>
     <div class="landing__buttons">
       <button id="btn-full" class="mode-btn">
         <span class="mode-btn__label">풀버전</span>
-        <span class="mode-btn__sub">질문 + 전체 답변 문장</span>
+        <span class="mode-btn__sub">전체 질문 + 즐겨찾기 · 수정 · 추가</span>
       </button>
       <button id="btn-summary" class="mode-btn">
         <span class="mode-btn__label">요약버전</span>
-        <span class="mode-btn__sub">질문 + 핵심 키워드 위주</span>
+        <span class="mode-btn__sub">★ 즐겨찾기한 질문만</span>
       </button>
       <button id="btn-live" class="mode-btn mode-btn--live">
         <span class="mode-btn__label">🎤 실전 면접</span>
-        <span class="mode-btn__sub">면접관과 1:1로, 질문에 하나씩 답해보기</span>
+        <span class="mode-btn__sub">즐겨찾기한 질문으로 1:1 연습</span>
       </button>
     </div>
   </div>
@@ -56,6 +69,15 @@
     <button id="btn-back" class="back-btn">← 뒤로가기</button>
     <h1 id="list-title" class="list-header__title"></h1>
   </header>
+  <div id="list-toolbar" class="list-toolbar" hidden>
+    <button id="btn-add-question" class="toolbar-btn">+ 질문 추가</button>
+    <button id="btn-delete-mode" class="toolbar-btn toolbar-btn--danger">삭제</button>
+    <div id="delete-mode-actions" class="delete-mode-actions" hidden>
+      <span id="delete-selected-count" class="delete-mode-actions__count">0개 선택</span>
+      <button id="btn-delete-selected" class="toolbar-btn toolbar-btn--danger" disabled>선택 삭제</button>
+      <button id="btn-delete-cancel" class="toolbar-btn">취소</button>
+    </div>
+  </div>
   <main id="accordion-root" class="accordion-root"></main>
 </div>
 
@@ -72,7 +94,7 @@
       </div>
       <div id="live-answer-row" class="live-bubble__row live-bubble__row--answer" hidden>
         <span class="live-tag live-tag--you">지원자 답변</span>
-        <p id="live-answer-keywords" class="qa-keywords"></p>
+        <div id="live-answer-keywords" class="qa-keyword-chips"></div>
         <p id="live-answer-text" class="qa-answer-text"></p>
       </div>
       <p id="live-hint" class="live-hint"></p>
@@ -88,6 +110,83 @@
         <span class="mode-btn__sub">질문 순서를 새로 섞어서 시작</span>
       </button>
       <button id="btn-live-home" class="back-btn">홈으로</button>
+    </div>
+  </div>
+</div>
+
+<!-- 기업 추가 모달 -->
+<div id="modal-add-company" class="modal-overlay" hidden>
+  <div class="modal">
+    <h2 class="modal__title">기업 추가</h2>
+    <label class="modal__label" for="add-company-name">기업명</label>
+    <input id="add-company-name" class="modal__input" type="text" placeholder="예: 세스코" />
+
+    <p class="modal__label">데이터 소스</p>
+    <div class="modal__radio-list">
+      <label class="modal__radio-option">
+        <input type="radio" name="add-company-source-mode" value="copy" checked />
+        <span>기존 기업 데이터 복사</span>
+      </label>
+      <label class="modal__radio-option">
+        <input type="radio" name="add-company-source-mode" value="upload" />
+        <span>텍스트 파일 업로드</span>
+      </label>
+    </div>
+
+    <div id="add-company-copy-section">
+      <p class="modal__label">복사할 기업</p>
+      <div id="add-company-source-list" class="modal__radio-list"></div>
+    </div>
+
+    <div id="add-company-upload-section" hidden>
+      <p class="modal__label">텍스트 파일 선택</p>
+      <label for="add-company-file-input" class="modal__file-drop">
+        <span id="add-company-file-name">클릭해서 .txt 파일을 선택하세요</span>
+      </label>
+      <input id="add-company-file-input" class="modal__file-input" type="file" accept=".txt,text/plain" />
+      <p class="modal__hint">"Q. " 또는 "⭐ Q. "로 시작하는 질문 포맷의 텍스트 파일이어야 합니다.</p>
+    </div>
+
+    <p id="add-company-error" class="gate__error" hidden></p>
+    <div class="modal__buttons">
+      <button id="btn-add-company-cancel" type="button" class="qa-cancel-btn">취소</button>
+      <button id="btn-add-company-confirm" type="button" class="qa-save-btn">추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- 질문 추가 모달 -->
+<div id="modal-add-question" class="modal-overlay" hidden>
+  <div class="modal">
+    <h2 class="modal__title">질문 추가</h2>
+    <label class="modal__label" for="add-q-category">카테고리</label>
+    <input
+      id="add-q-category"
+      class="modal__input"
+      type="text"
+      list="add-q-category-options"
+      placeholder="예: 자기소개 · 이직 (없는 이름이면 새로 만들어져요)"
+    />
+    <datalist id="add-q-category-options"></datalist>
+    <label class="modal__label" for="add-q-question">질문</label>
+    <input id="add-q-question" class="modal__input" type="text" placeholder="질문을 입력하세요" />
+    <label class="modal__label" for="add-q-answer">답변</label>
+    <textarea id="add-q-answer" class="modal__textarea" placeholder="답변을 입력하세요"></textarea>
+    <p id="add-question-error" class="gate__error" hidden></p>
+    <div class="modal__buttons">
+      <button id="btn-add-question-cancel" type="button" class="qa-cancel-btn">취소</button>
+      <button id="btn-add-question-confirm" type="button" class="qa-save-btn">추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- 범용 확인 모달 (기업 삭제 / 질문 삭제) -->
+<div id="modal-confirm" class="modal-overlay" hidden>
+  <div class="modal modal--confirm">
+    <p id="modal-confirm-message" class="modal__message"></p>
+    <div class="modal__buttons">
+      <button id="btn-confirm-cancel" type="button" class="qa-cancel-btn">취소</button>
+      <button id="btn-confirm-ok" type="button" class="qa-save-btn qa-save-btn--danger">삭제</button>
     </div>
   </div>
 </div>

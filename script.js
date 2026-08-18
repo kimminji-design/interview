@@ -1,4 +1,4 @@
-// 화면 전환 + 아코디언 렌더링 + 랜덤 순서 로직
+// 화면 전환 + 기업 관리 + 아코디언 렌더링(즐겨찾기/삭제/수정/추가) + 실전 면접 로직
 
 function shuffle(arr) {
   const a = arr.slice();
@@ -9,16 +9,51 @@ function shuffle(arr) {
   return a;
 }
 
+// ================= DOM 참조 =================
 const gateView = document.getElementById('gate-view');
 const gateForm = document.getElementById('gate-form');
 const gateInput = document.getElementById('gate-input');
 const gateError = document.getElementById('gate-error');
 
+const companyView = document.getElementById('company-view');
+const companyListEl = document.getElementById('company-list');
+const btnAddCompany = document.getElementById('btn-add-company');
+
 const landingView = document.getElementById('landing-view');
+const landingCompanyName = document.getElementById('landing-company-name');
 const listView = document.getElementById('list-view');
 const liveView = document.getElementById('live-view');
 const listTitle = document.getElementById('list-title');
+const listToolbar = document.getElementById('list-toolbar');
 const accordionRoot = document.getElementById('accordion-root');
+const btnAddQuestion = document.getElementById('btn-add-question');
+const btnDeleteMode = document.getElementById('btn-delete-mode');
+const deleteModeActions = document.getElementById('delete-mode-actions');
+const deleteSelectedCountEl = document.getElementById('delete-selected-count');
+const btnDeleteSelected = document.getElementById('btn-delete-selected');
+const btnDeleteCancel = document.getElementById('btn-delete-cancel');
+
+const modalAddCompany = document.getElementById('modal-add-company');
+const addCompanyNameInput = document.getElementById('add-company-name');
+const addCompanySourceList = document.getElementById('add-company-source-list');
+const addCompanyError = document.getElementById('add-company-error');
+const addCompanyCopySection = document.getElementById('add-company-copy-section');
+const addCompanyUploadSection = document.getElementById('add-company-upload-section');
+const addCompanyFileInput = document.getElementById('add-company-file-input');
+const addCompanyFileDrop = document.querySelector('label[for="add-company-file-input"]');
+const addCompanyFileNameEl = document.getElementById('add-company-file-name');
+
+const modalAddQuestion = document.getElementById('modal-add-question');
+const addQCategoryInput = document.getElementById('add-q-category');
+const addQCategoryOptions = document.getElementById('add-q-category-options');
+const addQQuestionInput = document.getElementById('add-q-question');
+const addQAnswerInput = document.getElementById('add-q-answer');
+const addQuestionError = document.getElementById('add-question-error');
+
+const modalConfirm = document.getElementById('modal-confirm');
+const modalConfirmMessage = document.getElementById('modal-confirm-message');
+const btnConfirmCancel = document.getElementById('btn-confirm-cancel');
+const btnConfirmOk = document.getElementById('btn-confirm-ok');
 
 // ================= 비밀번호 확인 =================
 // 클라이언트 사이드 정적 페이지라 완전한 보안은 아니지만, 아무나 바로 들어오지
@@ -42,7 +77,6 @@ gateForm.addEventListener('submit', (e) => {
     gateInput.value = '';
     gateInput.focus();
     gateForm.classList.remove('shake');
-    // eslint-disable-next-line no-unused-expressions
     gateForm.offsetWidth; // 애니메이션 재실행을 위한 리플로우 강제
     gateForm.classList.add('shake');
   }
@@ -50,12 +84,9 @@ gateForm.addEventListener('submit', (e) => {
 
 function unlockGate() {
   gateView.classList.remove('active');
-  landingView.classList.add('active');
+  companyView.classList.add('active');
+  renderCompanyList();
 }
-
-document.getElementById('btn-full').addEventListener('click', () => openList('full'));
-document.getElementById('btn-summary').addEventListener('click', () => openList('summary'));
-document.getElementById('btn-back').addEventListener('click', showLanding);
 
 function showLanding() {
   listView.classList.remove('active');
@@ -65,87 +96,518 @@ function showLanding() {
   stopTimer();
 }
 
-// ================= 핀 고정 질문 선별 (비파괴적) =================
-// "1분 자기소개"는 항상 맨 앞, 그 다음 5개(성격/강점/약점/협업갈등/지원동기)는
-// 매번 순서를 섞어서 앞쪽에 배치한다. 원본 배열은 건드리지 않고 id만 골라낸다.
-const INTRO_PATTERNS = [(q) => q.question.includes('1분') && q.question.includes('자기소개')];
-const SPECIAL_SLOTS = [
-  { patterns: [(q) => q.question.includes('성격') && q.question.includes('장') && q.question.includes('단')] },
-  { patterns: [(q) => q.question.includes('강점')] },
-  { patterns: [(q) => q.question.includes('약점')] },
-  {
-    patterns: [
-      (q) => q.question.includes('개발자') && q.question.includes('충돌'),
-      (q) => q.question.includes('충돌') && q.question.includes('경험'),
-      (q) => q.question.includes('갈등') && q.question.includes('경험'),
-    ],
-  },
-  { patterns: [(q) => q.question.includes('이직') && q.question.includes('이유')] },
-];
+document.getElementById('btn-back').addEventListener('click', showLanding);
 
-function pickPinned(questions) {
-  const used = new Set();
-  function findFirst(patterns) {
-    for (const pattern of patterns) {
-      const found = questions.find((q) => !used.has(q.id) && pattern(q));
-      if (found) {
-        used.add(found.id);
-        return found;
-      }
-    }
-    return null;
-  }
-  const intro = findFirst(INTRO_PATTERNS);
-  const specials = SPECIAL_SLOTS.map((slot) => findFirst(slot.patterns)).filter(Boolean);
-  return { intro, specials, usedIds: used };
+// ================= 범용 확인 모달 =================
+let pendingConfirmAction = null;
+
+function showConfirmModal(message, onConfirm, confirmLabel) {
+  modalConfirmMessage.textContent = message;
+  btnConfirmOk.textContent = confirmLabel || '삭제';
+  pendingConfirmAction = onConfirm;
+  modalConfirm.hidden = false;
 }
 
-function openList(mode) {
-  const questions = getEditedQuestions().filter((q) => mode === 'full' || q.starred);
-  listTitle.textContent = mode === 'full' ? '풀버전 연습' : '요약버전 연습';
+function closeConfirmModal() {
+  modalConfirm.hidden = true;
+  pendingConfirmAction = null;
+}
 
-  const { intro, specials, usedIds } = pickPinned(questions);
-  const pinned = [];
-  if (intro) pinned.push(intro);
-  pinned.push(...shuffle(specials));
+btnConfirmCancel.addEventListener('click', closeConfirmModal);
+btnConfirmOk.addEventListener('click', () => {
+  const action = pendingConfirmAction;
+  closeConfirmModal();
+  if (action) action();
+});
 
-  // 카테고리 순서는 데이터에 등장하는 원래 순서를 그대로 유지한다 (랜덤 셔플 없음).
-  const categoryOrder = [];
-  const categoryMap = new Map();
+function attachOverlayDismiss(overlay, onDismiss) {
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) onDismiss();
+  });
+}
+
+attachOverlayDismiss(modalConfirm, closeConfirmModal);
+
+// ================= 키워드 칩 렌더링 (아코디언 · 실전 면접 공용) =================
+function renderKeywordChips(container, keywords) {
+  container.innerHTML = '';
+  const list = Array.isArray(keywords) ? keywords : [];
+  container.hidden = list.length === 0;
+  for (const kw of list) {
+    const chip = document.createElement('span');
+    chip.className = 'qa-keyword-chip';
+    chip.textContent = kw;
+    container.appendChild(chip);
+  }
+}
+
+// ================= 기업 선택 화면 =================
+function renderCompanyList() {
+  companyListEl.innerHTML = '';
+
+  const companies = getCompanies();
+  if (companies.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'company-list__empty';
+    empty.textContent = '등록된 기업이 없습니다. 기업을 추가해주세요.';
+    companyListEl.appendChild(empty);
+  }
+
+  for (const company of companies) {
+    const card = document.createElement('div');
+    card.className = 'company-card';
+
+    const selectBtn = document.createElement('button');
+    selectBtn.type = 'button';
+    selectBtn.className = 'company-card__select';
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'company-card__name';
+    nameEl.textContent = company.name;
+
+    const countEl = document.createElement('span');
+    countEl.className = 'company-card__count';
+    countEl.textContent = countCompanyQuestions(company) + '개 질문';
+
+    selectBtn.appendChild(nameEl);
+    selectBtn.appendChild(countEl);
+    selectBtn.addEventListener('click', () => chooseCompany(company.id));
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'company-card__delete';
+    delBtn.textContent = '🗑';
+    delBtn.setAttribute('aria-label', '기업 삭제');
+    delBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showConfirmModal(
+        '"' + company.name + '" 기업 데이터를 정말 삭제하시겠습니까?\n삭제하면 되돌릴 수 없습니다.',
+        () => {
+          deleteCompany(company.id);
+          renderCompanyList();
+        }
+      );
+    });
+
+    card.appendChild(selectBtn);
+    card.appendChild(delBtn);
+    companyListEl.appendChild(card);
+  }
+}
+
+function chooseCompany(id) {
+  selectCompany(id);
+  const company = getCurrentCompany();
+  landingCompanyName.textContent = company ? company.name : '';
+  companyView.classList.remove('active');
+  landingView.classList.add('active');
+}
+
+document.getElementById('btn-change-company').addEventListener('click', () => {
+  landingView.classList.remove('active');
+  companyView.classList.add('active');
+  renderCompanyList();
+});
+
+// ---- 기업 추가 모달 ----
+let pendingUploadFile = null;
+
+function openAddCompanyModal() {
+  addCompanyNameInput.value = '';
+  addCompanyError.hidden = true;
+  renderAddCompanySourceList();
+
+  // 데이터 소스는 매번 "기존 기업 복사"로 초기화한다.
+  const copyRadio = document.querySelector('input[name="add-company-source-mode"][value="copy"]');
+  if (copyRadio) copyRadio.checked = true;
+  addCompanyCopySection.hidden = false;
+  addCompanyUploadSection.hidden = true;
+
+  pendingUploadFile = null;
+  addCompanyFileInput.value = '';
+  addCompanyFileNameEl.textContent = '클릭해서 .txt 파일을 선택하세요';
+  addCompanyFileDrop.classList.remove('has-file', 'is-dragover');
+
+  modalAddCompany.hidden = false;
+  addCompanyNameInput.focus();
+}
+
+document.querySelectorAll('input[name="add-company-source-mode"]').forEach((radio) => {
+  radio.addEventListener('change', () => {
+    const mode = radio.value;
+    if (radio.checked) {
+      addCompanyCopySection.hidden = mode !== 'copy';
+      addCompanyUploadSection.hidden = mode !== 'upload';
+      addCompanyError.hidden = true;
+    }
+  });
+});
+
+function setPendingUploadFile(file) {
+  pendingUploadFile = file || null;
+  if (file) {
+    addCompanyFileNameEl.textContent = '📄 ' + file.name;
+    addCompanyFileDrop.classList.add('has-file');
+  } else {
+    addCompanyFileNameEl.textContent = '클릭해서 .txt 파일을 선택하세요';
+    addCompanyFileDrop.classList.remove('has-file');
+  }
+}
+
+addCompanyFileInput.addEventListener('change', () => {
+  setPendingUploadFile(addCompanyFileInput.files && addCompanyFileInput.files[0]);
+});
+
+addCompanyFileDrop.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  addCompanyFileDrop.classList.add('is-dragover');
+});
+addCompanyFileDrop.addEventListener('dragleave', () => {
+  addCompanyFileDrop.classList.remove('is-dragover');
+});
+addCompanyFileDrop.addEventListener('drop', (e) => {
+  e.preventDefault();
+  addCompanyFileDrop.classList.remove('is-dragover');
+  const file = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (file) setPendingUploadFile(file);
+});
+
+function renderAddCompanySourceList() {
+  addCompanySourceList.innerHTML = '';
+  const companies = getCompanies();
+
+  if (companies.length === 0) {
+    const p = document.createElement('p');
+    p.className = 'modal__hint';
+    p.textContent = '복사할 기존 기업 데이터가 없습니다. 빈 상태로 새로 만들어집니다.';
+    addCompanySourceList.appendChild(p);
+    return;
+  }
+
+  companies.forEach((c, idx) => {
+    const label = document.createElement('label');
+    label.className = 'modal__radio-option';
+
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = 'add-company-source';
+    input.value = c.id;
+    if (idx === 0) input.checked = true;
+
+    const span = document.createElement('span');
+    span.textContent = c.name;
+
+    label.appendChild(input);
+    label.appendChild(span);
+    addCompanySourceList.appendChild(label);
+  });
+}
+
+btnAddCompany.addEventListener('click', openAddCompanyModal);
+document.getElementById('btn-add-company-cancel').addEventListener('click', () => {
+  modalAddCompany.hidden = true;
+});
+attachOverlayDismiss(modalAddCompany, () => {
+  modalAddCompany.hidden = true;
+});
+
+// ================= 업로드 텍스트 파일 파싱 =================
+// "━━━" 구분선 사이의 텍스트가 카테고리 제목, "Q. "/"⭐ Q. "로 시작하는 줄이
+// 질문(⭐면 즐겨찾기), 다음 Q./구분선 전까지의 줄이 답변인 포맷을 파싱한다.
+// 형식이 어긋나는 줄을 만나도 경고만 남기고 파싱을 계속 진행한다.
+const SEPARATOR_LINE = /^[━─=—-]{5,}$/;
+const QUESTION_LINE = /^(⭐)?\s*Q\.\s*(.+)$/;
+
+function parseCompanyTextFile(text) {
+  const lines = text.split(/\r?\n/);
+  const categories = [];
+  const warnings = [];
+  let currentCategory = null;
+  let currentQuestion = null;
+  let justSawSeparator = false;
+
+  function ensureCategory(name) {
+    currentCategory = { name, questions: [] };
+    categories.push(currentCategory);
+  }
+
+  function finalizeQuestion() {
+    if (!currentQuestion) return;
+    const answer = currentQuestion.answerLines.join(' ').replace(/\s+/g, ' ').trim();
+    currentCategory.questions.push({
+      question: currentQuestion.question,
+      answer,
+      favorite: currentQuestion.favorite,
+    });
+    currentQuestion = null;
+  }
+
+  lines.forEach((rawLine, idx) => {
+    const line = rawLine.trim();
+    if (line === '') return; // 빈 줄은 무시 — 질문/카테고리 경계 신호로 쓰지 않는다
+
+    if (SEPARATOR_LINE.test(line)) {
+      finalizeQuestion();
+      justSawSeparator = true;
+      return;
+    }
+
+    const qMatch = line.match(QUESTION_LINE);
+    if (qMatch) {
+      finalizeQuestion();
+      if (!currentCategory) {
+        warnings.push('(줄 ' + (idx + 1) + ') 카테고리 없이 등장한 질문이라 "미분류"에 담았습니다: "' + qMatch[2].slice(0, 30) + '"');
+        ensureCategory('미분류');
+      }
+      justSawSeparator = false;
+      currentQuestion = {
+        question: qMatch[2].trim(),
+        favorite: !!qMatch[1],
+        answerLines: [],
+      };
+      return;
+    }
+
+    if (justSawSeparator) {
+      finalizeQuestion();
+      ensureCategory(line);
+      justSawSeparator = false;
+      return;
+    }
+
+    if (currentQuestion) {
+      currentQuestion.answerLines.push(line);
+    } else {
+      warnings.push('(줄 ' + (idx + 1) + ') 질문/카테고리 문맥 밖의 텍스트를 건너뜁니다: "' + line.slice(0, 40) + '"');
+    }
+  });
+
+  finalizeQuestion();
+
+  return { categories: categories.filter((c) => c.questions.length > 0), warnings };
+}
+
+document.getElementById('btn-add-company-confirm').addEventListener('click', async () => {
+  const name = addCompanyNameInput.value.trim();
+  if (!name) {
+    addCompanyError.textContent = '기업명을 입력해주세요.';
+    addCompanyError.hidden = false;
+    return;
+  }
+
+  const mode = document.querySelector('input[name="add-company-source-mode"]:checked').value;
+
+  if (mode === 'copy') {
+    const selected = addCompanySourceList.querySelector('input[name="add-company-source"]:checked');
+    const sourceId = selected ? selected.value : null;
+    addCompany(name, sourceId);
+    modalAddCompany.hidden = true;
+    renderCompanyList();
+    return;
+  }
+
+  // mode === 'upload'
+  if (!pendingUploadFile) {
+    addCompanyError.textContent = '업로드할 텍스트 파일을 선택해주세요.';
+    addCompanyError.hidden = false;
+    return;
+  }
+
+  let text;
+  try {
+    text = await pendingUploadFile.text();
+  } catch (e) {
+    addCompanyError.textContent = '파일을 읽는 중 문제가 발생했습니다.';
+    addCompanyError.hidden = false;
+    return;
+  }
+
+  const { categories, warnings } = parseCompanyTextFile(text);
+
+  if (warnings.length > 0) {
+    console.warn('[기업 추가 · 파일 파싱] 형식이 예상과 다른 줄 ' + warnings.length + '개를 건너뛰었습니다:');
+    warnings.forEach((w) => console.warn('  ' + w));
+  }
+
+  const questionCount = categories.reduce((sum, c) => sum + c.questions.length, 0);
+  const favoriteCount = categories.reduce(
+    (sum, c) => sum + c.questions.filter((q) => q.favorite).length,
+    0
+  );
+
+  if (categories.length === 0 || questionCount === 0) {
+    addCompanyError.textContent = '파일에서 질문을 찾지 못했습니다. "Q. " 형식으로 시작하는 질문이 있는지 확인해주세요.';
+    addCompanyError.hidden = false;
+    console.warn('[기업 추가 · 파일 파싱] 질문을 하나도 찾지 못했습니다. 포맷을 확인해주세요.');
+    return;
+  }
+
+  console.log(
+    '[기업 추가 · 파일 파싱 완료] "' + name + '" — 카테고리 ' + categories.length +
+      '개 / 질문 ' + questionCount + '개 / 즐겨찾기 ' + favoriteCount + '개'
+  );
+  console.log(categories.map((c) => '  - ' + c.name + ' (' + c.questions.length + '문항)').join('\n'));
+
+  createCompanyFromParsedCategories(name, categories);
+  modalAddCompany.hidden = true;
+  renderCompanyList();
+});
+
+// ================= 풀버전 / 요약버전 (아코디언) =================
+let currentListMode = 'full';
+
+// ---- 삭제 모드: 툴바의 "삭제"를 누르면 각 질문 카드 앞에 체크박스가 나타나고,
+// 여러 개를 고른 뒤 "선택 삭제"로 한 번에 지운다. 카드에 있던 즉시-삭제
+// 휴지통 아이콘은 오조작 위험 때문에 없앴다. ----
+let deleteMode = false;
+let selectedForDeletion = new Set();
+
+function updateDeleteToolbarUI() {
+  const inFull = currentListMode === 'full';
+  listToolbar.hidden = !inFull;
+  btnAddQuestion.hidden = !inFull || deleteMode;
+  btnDeleteMode.hidden = !inFull || deleteMode;
+  deleteModeActions.hidden = !deleteMode;
+  updateDeleteSelectionCount();
+}
+
+function updateDeleteSelectionCount() {
+  const count = selectedForDeletion.size;
+  deleteSelectedCountEl.textContent = count + '개 선택';
+  btnDeleteSelected.disabled = count === 0;
+}
+
+function enterDeleteMode() {
+  deleteMode = true;
+  selectedForDeletion.clear();
+  updateDeleteToolbarUI();
+  openList(currentListMode);
+}
+
+function exitDeleteMode() {
+  deleteMode = false;
+  selectedForDeletion.clear();
+  updateDeleteToolbarUI();
+  openList(currentListMode);
+}
+
+btnDeleteMode.addEventListener('click', enterDeleteMode);
+btnDeleteCancel.addEventListener('click', exitDeleteMode);
+
+btnDeleteSelected.addEventListener('click', () => {
+  if (selectedForDeletion.size === 0) return;
+  const count = selectedForDeletion.size;
+  showConfirmModal('선택한 ' + count + '개 질문을 정말 삭제하시겠습니까?', () => {
+    deleteQuestions([...selectedForDeletion]);
+    exitDeleteMode();
+  });
+});
+
+document.getElementById('btn-full').addEventListener('click', () => openList('full'));
+document.getElementById('btn-summary').addEventListener('click', () => openList('summary'));
+
+function groupByCategory(questions) {
+  const order = [];
+  const map = new Map();
   for (const q of questions) {
-    if (usedIds.has(q.id)) continue;
-    let bucket = categoryMap.get(q.category);
+    let bucket = map.get(q.category);
     if (!bucket) {
       bucket = { name: q.category, questions: [] };
-      categoryMap.set(q.category, bucket);
-      categoryOrder.push(bucket);
+      map.set(q.category, bucket);
+      order.push(bucket);
     }
     bucket.questions.push(q);
   }
+  return order;
+}
 
-  renderAccordion(pinned, categoryOrder);
+function openList(mode) {
+  currentListMode = mode;
+  if (mode !== 'full') {
+    deleteMode = false;
+    selectedForDeletion.clear();
+  }
+  const company = getCurrentCompany();
+  const companyName = company ? company.name : '';
+  listTitle.textContent = (mode === 'full' ? '풀버전' : '요약버전') + ' · ' + companyName;
+  updateDeleteToolbarUI();
 
   landingView.classList.remove('active');
   liveView.classList.remove('active');
   listView.classList.add('active');
   window.scrollTo(0, 0);
+
+  const all = getCurrentCompanyFlatQuestions();
+  const questions = mode === 'full' ? all : all.filter((q) => q.favorite);
+
+  if (mode === 'summary' && questions.length === 0) {
+    renderEmptyState(
+      '⭐',
+      '아직 즐겨찾기한 질문이 없어요',
+      '풀버전에서 질문 옆 ☆ 버튼을 눌러 요약버전 · 실전 면접에 사용할 질문을 골라보세요.',
+      '풀버전으로 가기',
+      () => openList('full')
+    );
+    return;
+  }
+
+  if (mode === 'full' && questions.length === 0) {
+    renderEmptyState(
+      '📝',
+      '등록된 질문이 없어요',
+      '위 "+ 질문 추가" 버튼으로 첫 질문을 만들어보세요.',
+      null,
+      null
+    );
+    return;
+  }
+
+  renderAccordion(groupByCategory(questions), mode);
 }
 
-function renderAccordion(pinned, categories) {
+function renderEmptyState(icon, title, desc, buttonLabel, onClick) {
   accordionRoot.innerHTML = '';
+  const box = document.createElement('div');
+  box.className = 'empty-state';
 
-  if (pinned.length > 0) {
-    accordionRoot.appendChild(buildCategorySection('🎯 필수 준비 질문', pinned, true));
+  const iconEl = document.createElement('p');
+  iconEl.className = 'empty-state__icon';
+  iconEl.textContent = icon;
+
+  const titleEl = document.createElement('p');
+  titleEl.className = 'empty-state__title';
+  titleEl.textContent = title;
+
+  const descEl = document.createElement('p');
+  descEl.className = 'empty-state__desc';
+  descEl.textContent = desc;
+
+  box.appendChild(iconEl);
+  box.appendChild(titleEl);
+  box.appendChild(descEl);
+
+  if (buttonLabel && onClick) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'mode-btn';
+    btn.textContent = buttonLabel;
+    btn.addEventListener('click', onClick);
+    box.appendChild(btn);
   }
 
+  accordionRoot.appendChild(box);
+}
+
+function renderAccordion(categories, mode) {
+  accordionRoot.innerHTML = '';
   for (const cat of categories) {
-    accordionRoot.appendChild(buildCategorySection(cat.name, cat.questions, false));
+    accordionRoot.appendChild(buildCategorySection(cat.name, cat.questions, mode));
   }
 }
 
-function buildCategorySection(title, questions, pinnedStyle) {
+function buildCategorySection(title, questions, mode) {
   const section = document.createElement('section');
-  section.className = 'category' + (pinnedStyle ? ' category--pinned' : '');
+  section.className = 'category';
 
   const heading = document.createElement('h2');
   heading.className = 'category__title';
@@ -166,40 +628,79 @@ function buildCategorySection(title, questions, pinnedStyle) {
     } else if (!q.subcategory) {
       lastSub = null;
     }
-    list.appendChild(buildQAItem(q));
+    list.appendChild(buildQAItem(q, mode));
   }
 
   section.appendChild(list);
   return section;
 }
 
-// 풀버전/요약버전 모두 같은 구조로 보여준다: 키워드(작게, 위) → 전체 답변(아래).
-// 두 화면의 차이는 "어떤 질문들을 보여주는가"(요약버전은 starred만)일 뿐,
-// 한 질문을 펼쳤을 때 보이는 내용 자체는 동일하다. 수정 대상은 항상 fullAnswer.
-function buildQAItem(q) {
-  const field = 'fullAnswer';
+// mode 'full'일 때만 즐겨찾기(☆/★) 아이콘을 보여준다. 삭제는 카드에서 즉시
+// 하지 않고, 툴바의 "삭제" → 체크박스 다중 선택 → "선택 삭제" 흐름으로만 한다.
+// 질문/답변 수정과 키워드 수정은 두 모드 모두에서 가능하다.
+function buildQAItem(q, mode) {
+  const showManageIcons = mode === 'full';
 
   const item = document.createElement('div');
   item.className = 'qa-item';
 
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'qa-question';
-  btn.setAttribute('aria-expanded', 'false');
+  const row = document.createElement('div');
+  row.className = 'qa-question';
 
-  const qText = document.createElement('span');
-  qText.className = 'qa-question__text';
+  if (showManageIcons && deleteMode) {
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'qa-select-checkbox';
+    checkbox.setAttribute('aria-label', '삭제할 질문 선택');
+    checkbox.checked = selectedForDeletion.has(q.id);
+    checkbox.addEventListener('click', (e) => e.stopPropagation());
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) selectedForDeletion.add(q.id);
+      else selectedForDeletion.delete(q.id);
+      updateDeleteSelectionCount();
+    });
+    row.appendChild(checkbox);
+  }
+
+  const toggleBtn = document.createElement('button');
+  toggleBtn.type = 'button';
+  toggleBtn.className = 'qa-question__toggle';
+  toggleBtn.setAttribute('aria-expanded', 'false');
+
   const qTextLabel = document.createElement('span');
+  qTextLabel.className = 'qa-question__text';
   qTextLabel.textContent = q.question;
-  qText.appendChild(qTextLabel);
+  toggleBtn.appendChild(qTextLabel);
+  row.appendChild(toggleBtn);
+
+  if (showManageIcons && !deleteMode) {
+    const favBtn = document.createElement('button');
+    favBtn.type = 'button';
+    favBtn.className = 'qa-icon-btn qa-fav-btn';
+    favBtn.setAttribute('aria-label', '즐겨찾기');
+
+    function updateFavButton() {
+      favBtn.textContent = q.favorite ? '★' : '☆';
+      favBtn.classList.toggle('is-favorite', !!q.favorite);
+    }
+    updateFavButton();
+
+    favBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const updated = toggleFavorite(q.id);
+      if (updated) {
+        q.favorite = updated.favorite;
+        updateFavButton();
+      }
+    });
+    row.appendChild(favBtn);
+  }
 
   const arrow = document.createElement('span');
   arrow.className = 'qa-arrow';
   arrow.setAttribute('aria-hidden', 'true');
   arrow.textContent = '▾';
-
-  btn.appendChild(qText);
-  btn.appendChild(arrow);
+  row.appendChild(arrow);
 
   const panel = document.createElement('div');
   panel.className = 'qa-answer';
@@ -207,97 +708,184 @@ function buildQAItem(q) {
   const inner = document.createElement('div');
   inner.className = 'qa-answer__inner';
 
-  // 키워드를 작은 태그로 먼저 보여주고, 그 아래 전체 답변 문장을 보여준다.
-  const keywordsEl = document.createElement('p');
-  keywordsEl.className = 'qa-keywords';
-  keywordsEl.textContent = q.summaryKeywords || '';
-  keywordsEl.hidden = !q.summaryKeywords;
-  inner.appendChild(keywordsEl);
+  // 최종 배치 순서: 질문 제목(row) → 키워드 태그 → 답변 전문 → 수정 버튼들.
+  // 각 요소는 아래에서 만들고, 실제 inner.appendChild 순서는 함수 끝부분에서
+  // 한 번에 정리한다 (키워드 수정 폼은 키워드 자리에, 답변 수정 폼은 답변 자리에).
+  const chipsEl = document.createElement('div');
+  chipsEl.className = 'qa-keyword-chips';
+  renderKeywordChips(chipsEl, q.keywords);
 
   const bodyEl = document.createElement('p');
   bodyEl.className = 'qa-answer-text';
-  bodyEl.textContent = q[field] || '';
-  bodyEl.hidden = !q[field];
-  inner.appendChild(bodyEl);
+  bodyEl.textContent = q.answer || '';
+  bodyEl.hidden = !q.answer;
 
   const actions = document.createElement('div');
   actions.className = 'qa-actions';
-
   const editBtn = document.createElement('button');
   editBtn.type = 'button';
   editBtn.className = 'qa-action-btn qa-action-btn--edit';
   editBtn.textContent = '✏️ 수정';
-
-  const revertBtn = document.createElement('button');
-  revertBtn.type = 'button';
-  revertBtn.className = 'qa-action-btn qa-action-btn--revert';
-  revertBtn.textContent = '↺ 원본으로 되돌리기';
-
   actions.appendChild(editBtn);
-  actions.appendChild(revertBtn);
-  inner.appendChild(actions);
+
+  const keywordEditBtn = document.createElement('button');
+  keywordEditBtn.type = 'button';
+  keywordEditBtn.className = 'qa-action-btn qa-action-btn--edit';
+  keywordEditBtn.textContent = '🏷️ 키워드 수정';
+  actions.appendChild(keywordEditBtn);
 
   const editBox = document.createElement('div');
   editBox.className = 'qa-edit-box';
   editBox.hidden = true;
 
+  const questionLabel = document.createElement('label');
+  questionLabel.className = 'qa-edit-label';
+  questionLabel.textContent = '질문';
+  const questionInput = document.createElement('input');
+  questionInput.type = 'text';
+  questionInput.className = 'qa-edit-input';
+
+  const answerLabel = document.createElement('label');
+  answerLabel.className = 'qa-edit-label';
+  answerLabel.textContent = '답변';
   const textarea = document.createElement('textarea');
   textarea.className = 'qa-edit-textarea';
 
   const editButtons = document.createElement('div');
   editButtons.className = 'qa-edit-buttons';
-
   const cancelBtn = document.createElement('button');
   cancelBtn.type = 'button';
   cancelBtn.className = 'qa-cancel-btn';
   cancelBtn.textContent = '취소';
-
   const saveBtn = document.createElement('button');
   saveBtn.type = 'button';
   saveBtn.className = 'qa-save-btn';
   saveBtn.textContent = '저장';
-
   editButtons.appendChild(cancelBtn);
   editButtons.appendChild(saveBtn);
+
+  editBox.appendChild(questionLabel);
+  editBox.appendChild(questionInput);
+  editBox.appendChild(answerLabel);
   editBox.appendChild(textarea);
   editBox.appendChild(editButtons);
+
+  // ---- 키워드 수정 (태그 형태로 추가/삭제) ----
+  const keywordEditBox = document.createElement('div');
+  keywordEditBox.className = 'qa-keyword-edit';
+  keywordEditBox.hidden = true;
+
+  let editingKeywords = [];
+  const keywordEditChips = document.createElement('div');
+  keywordEditChips.className = 'qa-keyword-edit__chips';
+
+  function renderEditingChips() {
+    keywordEditChips.innerHTML = '';
+    editingKeywords.forEach((kw, idx) => {
+      const chip = document.createElement('span');
+      chip.className = 'qa-keyword-chip qa-keyword-chip--removable';
+
+      const label = document.createElement('span');
+      label.textContent = kw;
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'qa-keyword-remove';
+      removeBtn.textContent = '✕';
+      removeBtn.setAttribute('aria-label', '키워드 삭제');
+      removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        editingKeywords.splice(idx, 1);
+        renderEditingChips();
+      });
+
+      chip.appendChild(label);
+      chip.appendChild(removeBtn);
+      keywordEditChips.appendChild(chip);
+    });
+  }
+
+  const keywordAddRow = document.createElement('div');
+  keywordAddRow.className = 'qa-keyword-edit__add';
+
+  const keywordInput = document.createElement('input');
+  keywordInput.type = 'text';
+  keywordInput.className = 'qa-keyword-input';
+  keywordInput.placeholder = '새 키워드 입력';
+  keywordInput.addEventListener('click', (e) => e.stopPropagation());
+  keywordInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addKeywordFromInput();
+    }
+  });
+
+  const keywordAddBtn = document.createElement('button');
+  keywordAddBtn.type = 'button';
+  keywordAddBtn.className = 'qa-keyword-add-btn';
+  keywordAddBtn.textContent = '추가';
+  keywordAddBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    addKeywordFromInput();
+  });
+
+  function addKeywordFromInput() {
+    const value = keywordInput.value.trim();
+    if (!value) return;
+    editingKeywords.push(value);
+    keywordInput.value = '';
+    renderEditingChips();
+    keywordInput.focus();
+  }
+
+  keywordAddRow.appendChild(keywordInput);
+  keywordAddRow.appendChild(keywordAddBtn);
+
+  const keywordEditButtons = document.createElement('div');
+  keywordEditButtons.className = 'qa-edit-buttons';
+  const keywordCancelBtn = document.createElement('button');
+  keywordCancelBtn.type = 'button';
+  keywordCancelBtn.className = 'qa-cancel-btn';
+  keywordCancelBtn.textContent = '취소';
+  const keywordSaveBtn = document.createElement('button');
+  keywordSaveBtn.type = 'button';
+  keywordSaveBtn.className = 'qa-save-btn';
+  keywordSaveBtn.textContent = '저장';
+  keywordEditButtons.appendChild(keywordCancelBtn);
+  keywordEditButtons.appendChild(keywordSaveBtn);
+
+  keywordEditBox.appendChild(keywordEditChips);
+  keywordEditBox.appendChild(keywordAddRow);
+  keywordEditBox.appendChild(keywordEditButtons);
+
+  // 질문 제목(위쪽 row) → 키워드 태그/키워드 수정 폼 → 답변 전문/답변 수정 폼 → 수정 버튼들
+  inner.appendChild(chipsEl);
+  inner.appendChild(keywordEditBox);
+  inner.appendChild(bodyEl);
   inner.appendChild(editBox);
+  inner.appendChild(actions);
 
   panel.appendChild(inner);
 
-  function syncEditedState() {
-    const edited = hasOverride(q.id, field);
-    revertBtn.style.display = edited ? '' : 'none';
-    let dot = qText.querySelector('.qa-edited-dot');
-    if (edited && !dot) {
-      dot = document.createElement('span');
-      dot.className = 'qa-edited-dot';
-      dot.title = '수정된 답변';
-      qText.appendChild(dot);
-    } else if (!edited && dot) {
-      dot.remove();
-    }
-  }
-
   function enterEditMode(e) {
     e.stopPropagation();
-    textarea.value = bodyEl.textContent;
+    questionInput.value = q.question;
+    textarea.value = q.answer;
     bodyEl.hidden = true;
-    keywordsEl.hidden = true;
+    chipsEl.hidden = true;
     actions.hidden = true;
     editBox.hidden = false;
-    textarea.focus();
+    questionInput.focus();
   }
 
   function exitEditMode() {
     editBox.hidden = true;
     actions.hidden = false;
     bodyEl.hidden = !bodyEl.textContent;
-    keywordsEl.hidden = !keywordsEl.textContent;
+    renderKeywordChips(chipsEl, q.keywords);
   }
 
   editBtn.addEventListener('click', enterEditMode);
-
   cancelBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     exitEditMode();
@@ -305,40 +893,109 @@ function buildQAItem(q) {
 
   saveBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const value = textarea.value.trim();
-    setQuestionOverride(q.id, field, value);
-    q[field] = value;
-    bodyEl.textContent = value;
+    const newQuestion = questionInput.value.trim();
+    const newAnswer = textarea.value.trim();
+    if (!newQuestion || !newAnswer) return;
+
+    const updated = updateQuestion(q.id, { question: newQuestion, answer: newAnswer });
+    if (updated) {
+      q.question = updated.question;
+      q.answer = updated.answer;
+      qTextLabel.textContent = q.question;
+      bodyEl.textContent = q.answer;
+    }
     exitEditMode();
-    syncEditedState();
   });
 
-  revertBtn.addEventListener('click', (e) => {
+  function enterKeywordEditMode(e) {
     e.stopPropagation();
-    clearQuestionOverrideField(q.id, field);
-    const base = findBaseQuestion(q.id);
-    const original = base ? base[field] : '';
-    q[field] = original;
-    bodyEl.textContent = original || '';
-    bodyEl.hidden = !original;
-    syncEditedState();
+    editingKeywords = Array.isArray(q.keywords) ? q.keywords.slice() : [];
+    renderEditingChips();
+    keywordInput.value = '';
+    chipsEl.hidden = true;
+    actions.hidden = true;
+    keywordEditBox.hidden = false;
+    keywordInput.focus();
+  }
+
+  function exitKeywordEditMode() {
+    keywordEditBox.hidden = true;
+    actions.hidden = false;
+    renderKeywordChips(chipsEl, q.keywords);
+  }
+
+  keywordEditBtn.addEventListener('click', enterKeywordEditMode);
+  keywordCancelBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    exitKeywordEditMode();
   });
 
-  syncEditedState();
+  keywordSaveBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const updated = updateQuestionKeywords(q.id, editingKeywords);
+    if (updated) {
+      q.keywords = updated.keywords;
+    }
+    exitKeywordEditMode();
+  });
 
-  btn.addEventListener('click', () => {
+  toggleBtn.addEventListener('click', () => {
     const isOpen = item.classList.toggle('open');
-    btn.setAttribute('aria-expanded', String(isOpen));
+    toggleBtn.setAttribute('aria-expanded', String(isOpen));
   });
 
-  item.appendChild(btn);
+  item.appendChild(row);
   item.appendChild(panel);
   return item;
 }
 
-// 실전 면접 화면에는 데이터에 저장된 명사형 질문 라벨(예: "이직하는 이유")을
-// 그대로 쓰지 않고, 면접관이 실제로 말하는 듯한 구어체 질문으로 바꿔서 보여준다.
-// 학습 모드(아코디언)의 질문 표기는 원본 그대로 유지하므로 여기서만 사용한다.
+// ---- 질문 추가 모달 ----
+function openAddQuestionModal() {
+  addQCategoryInput.value = '';
+  addQQuestionInput.value = '';
+  addQAnswerInput.value = '';
+  addQuestionError.hidden = true;
+
+  addQCategoryOptions.innerHTML = '';
+  const names = [...new Set(getCurrentCompanyCategories().map((c) => c.name))];
+  for (const name of names) {
+    const opt = document.createElement('option');
+    opt.value = name;
+    addQCategoryOptions.appendChild(opt);
+  }
+
+  modalAddQuestion.hidden = false;
+  addQCategoryInput.focus();
+}
+
+btnAddQuestion.addEventListener('click', openAddQuestionModal);
+document.getElementById('btn-add-question-cancel').addEventListener('click', () => {
+  modalAddQuestion.hidden = true;
+});
+attachOverlayDismiss(modalAddQuestion, () => {
+  modalAddQuestion.hidden = true;
+});
+
+document.getElementById('btn-add-question-confirm').addEventListener('click', () => {
+  const category = addQCategoryInput.value.trim();
+  const question = addQQuestionInput.value.trim();
+  const answer = addQAnswerInput.value.trim();
+
+  if (!category || !question || !answer) {
+    addQuestionError.textContent = '카테고리, 질문, 답변을 모두 입력해주세요.';
+    addQuestionError.hidden = false;
+    return;
+  }
+
+  addQuestion(category, question, answer);
+  modalAddQuestion.hidden = true;
+  openList('full');
+});
+
+// ================= 실전 면접 화면 문구 =================
+// 데이터에 저장된 명사형 질문 라벨(예: "이직하는 이유")을 그대로 쓰지 않고,
+// 면접관이 실제로 말하는 듯한 구어체 질문으로 바꿔서 보여준다. 아코디언의
+// 질문 표기는 원본 그대로 유지하므로 여기서만 사용한다.
 const LIVE_QUESTION_PHRASING = {
   '본인의 가장 큰 강점은 무엇인가': '본인의 가장 큰 강점은 무엇인가요?',
   '본인의 약점이나 보완이 필요한 부분은 무엇인가': '본인의 약점이나 보완이 필요한 부분은 무엇인가요?',
@@ -368,8 +1025,6 @@ const LIVE_QUESTION_PHRASING = {
   '어떤 디자이너가 되고 싶은가 (최종)': '앞으로 어떤 디자이너가 되고 싶으신가요?',
   연봉: '희망하시는 연봉을 말씀해주세요.',
   '입사 가능 시점': '입사 가능하신 시점이 언제쯤인가요?',
-  // "마무리" 카테고리는 "궁금한 점이 있는지" 하나로, "인사" 카테고리는
-  // "마지막으로 하고 싶은 말" 하나로 통합되어 있다 (store.js의 consolidateClosingSections).
   '궁금한 점이 있는지': '그 밖에 저희에게 궁금하신 점이 있다면 편하게 말씀해주세요.',
   '마지막으로 하고 싶은 말': '마지막으로 하고 싶은 말씀이 있다면 해주세요.',
 };
@@ -377,20 +1032,22 @@ const LIVE_QUESTION_PHRASING = {
 function toSpokenQuestion(text) {
   if (LIVE_QUESTION_PHRASING[text]) return LIVE_QUESTION_PHRASING[text];
   const trimmed = text.trim();
-  // 매핑에 없는 질문이 추가되더라도 최소한 자연스러운 구어체 종결형으로 보이도록 하는 보정.
   if (/[?？]$/.test(trimmed)) return trimmed;
-  if (/(나요|가요|까요|세요|주세요|습니다|니다)$/.test(trimmed)) return trimmed;
-  return trimmed + '에 대해 말씀해주세요.';
+  // 끝에 마침표 등이 붙어있으면 떼고 어미를 판단해야 "~해주세요."처럼 이미
+  // 자연스러운 문장에 "~에 대해 말씀해주세요."가 중복으로 붙지 않는다.
+  const core = trimmed.replace(/[.!?？]+$/, '');
+  if (/(나요|가요|까요|세요|주세요|습니다|니다)$/.test(core)) return trimmed;
+  return core + '에 대해 말씀해주세요.';
 }
 
 // ================= 실전 면접 모드 =================
-// "1분 자기소개"는 항상 맨 처음 질문으로 고정하고, 그 이후 질문들은 실제 면접에서
-// 자연스러운 큰 흐름(지원동기 → 직무/경험 → 프로젝트·포트폴리오 → 문제해결/역량 →
-// 폴라리스오피스 정합성 → 처우·컬처핏 → 마무리) 순서의 "구간(스테이지)"으로 먼저
-// 묶은 뒤, 각 구간 내부에서만 순서를 섞는 준랜덤 방식을 사용한다. 요약 키워드
-// (starred=true인 핵심 질문)만 대상으로 하며, 매번 세부 순서는 달라지지만 완전
-// 무작위로 인한 흐름 붕괴는 피할 수 있다.
+// 즐겨찾기(★)한 질문만 대상으로, 실제 면접에서 자연스러운 큰 흐름(자기소개 →
+// 지원동기 → 직무/경험 → 프로젝트·포트폴리오 → 문제해결/역량 → 폴라리스오피스
+// 정합성 → 처우·컬처핏 → 그 외) 순서의 "구간(스테이지)"으로 먼저 묶은 뒤, 각
+// 구간 내부에서만 순서를 섞는 준랜덤 방식을 사용한다. 매번 세부 순서는
+// 달라지지만 완전 무작위로 인한 흐름 붕괴는 피할 수 있다.
 const LIVE_STAGE_MATCHERS = [
+  (q) => q.question.includes('1분') && q.question.includes('자기소개'),
   (q) => q.question.includes('이직') && q.question.includes('이유'),
   (q) => q.category.includes('자기소개'),
   (q) => q.category.includes('포트폴리오') || q.category.includes('우리WON뱅킹'),
@@ -399,30 +1056,17 @@ const LIVE_STAGE_MATCHERS = [
   (q) => q.category.includes('방향만 메모'),
 ];
 
-function buildLiveInterviewOrder() {
-  const starred = getEditedQuestions().filter((q) => q.starred);
-
-  let intro = null;
-  const rest = [];
-  for (const q of starred) {
-    if (!intro && q.question.includes('1분') && q.question.includes('자기소개')) {
-      intro = q;
-    } else {
-      rest.push(q);
-    }
-  }
-
+function buildLiveInterviewOrder(favoriteQuestions) {
   const stages = LIVE_STAGE_MATCHERS.map(() => []);
-  const fallback = []; // 마무리·인사 등 위 흐름에 속하지 않는 나머지 (항상 마지막)
+  const fallback = [];
 
-  for (const q of rest) {
-    const stageIdx = LIVE_STAGE_MATCHERS.findIndex((m) => m(q));
-    (stageIdx === -1 ? fallback : stages[stageIdx]).push(q);
+  for (const q of favoriteQuestions) {
+    const idx = LIVE_STAGE_MATCHERS.findIndex((m) => m(q));
+    (idx === -1 ? fallback : stages[idx]).push(q);
   }
-  stages.push(fallback);
 
-  const questions = stages.flatMap((stage) => shuffle(stage));
-  return { intro, questions };
+  const [introStage, ...restStages] = stages;
+  return [...introStage, ...restStages.flatMap((s) => shuffle(s)), ...shuffle(fallback)];
 }
 
 const liveStage = document.getElementById('live-stage');
@@ -435,7 +1079,7 @@ const liveAnswerKeywords = document.getElementById('live-answer-keywords');
 const liveAnswerText = document.getElementById('live-answer-text');
 const liveHint = document.getElementById('live-hint');
 
-let liveSession = null; // { intro, questions, index, revealed }
+let liveSession = null; // { questions, index, revealed }
 
 // ---- 스톱워치: 질문이 뜨면 0초부터 시작, 답변을 펼치면 멈추고, 다음 질문으로
 // 넘어가면 다시 0초부터 시작한다. ----
@@ -473,7 +1117,13 @@ document.getElementById('btn-live-exit').addEventListener('click', (e) => {
 liveStage.addEventListener('click', handleLiveTap);
 
 function startLiveInterview() {
-  liveSession = { ...buildLiveInterviewOrder(), index: 0, revealed: false };
+  const favorites = getCurrentCompanyFlatQuestions().filter((q) => q.favorite);
+  if (favorites.length === 0) {
+    openList('summary'); // 즐겨찾기가 없으면 안내 문구가 있는 화면으로 유도
+    return;
+  }
+
+  liveSession = { questions: buildLiveInterviewOrder(favorites), index: 0, revealed: false };
 
   landingView.classList.remove('active');
   listView.classList.remove('active');
@@ -485,20 +1135,17 @@ function startLiveInterview() {
 }
 
 function currentLiveStep() {
-  const { intro, questions, index } = liveSession;
-  if (index === 0) {
-    return {
-      question: '먼저 간단하게 자기소개 부탁드립니다.',
-      keywords: intro ? intro.summaryKeywords : '',
-      answer: intro ? intro.fullAnswer : '',
-    };
-  }
-  const q = questions[index - 1];
-  return { question: toSpokenQuestion(q.question), keywords: q.summaryKeywords, answer: q.fullAnswer };
+  const q = liveSession.questions[liveSession.index];
+  const isIntro = q.question.includes('1분') && q.question.includes('자기소개');
+  return {
+    question: isIntro ? '먼저 간단하게 자기소개 부탁드립니다.' : toSpokenQuestion(q.question),
+    keywords: q.keywords,
+    answer: q.answer,
+  };
 }
 
 function renderLiveStep() {
-  const total = liveSession.questions.length + 1;
+  const total = liveSession.questions.length;
   const { index, revealed } = liveSession;
 
   if (index >= total) {
@@ -515,11 +1162,9 @@ function renderLiveStep() {
   liveQuestionText.textContent = step.question;
 
   if (revealed) {
-    const hasKeywords = !!step.keywords;
-    liveAnswerKeywords.textContent = step.keywords || '';
-    liveAnswerKeywords.style.display = hasKeywords ? '' : 'none';
+    renderKeywordChips(liveAnswerKeywords, step.keywords);
     liveAnswerText.textContent = step.answer || '';
-    liveAnswerText.style.display = step.answer ? '' : 'none';
+    liveAnswerText.hidden = !step.answer;
     liveAnswerRow.hidden = false;
     liveHint.textContent =
       index + 1 < total ? '탭하면 다음 질문으로 넘어가요' : '탭하면 면접이 종료돼요';
@@ -539,7 +1184,7 @@ function handleLiveTap() {
     liveSession.index += 1;
     liveSession.revealed = false;
     renderLiveStep();
-    if (liveSession.index < liveSession.questions.length + 1) {
+    if (liveSession.index < liveSession.questions.length) {
       startTimer();
     } else {
       stopTimer(); // 마지막 질문까지 끝났으면 타이머 정지
