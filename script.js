@@ -18,6 +18,9 @@ const gateError = document.getElementById('gate-error');
 const companyView = document.getElementById('company-view');
 const companyListEl = document.getElementById('company-list');
 const btnAddCompany = document.getElementById('btn-add-company');
+const btnExportData = document.getElementById('btn-export-data');
+const btnImportData = document.getElementById('btn-import-data');
+const importDataFileInput = document.getElementById('import-data-file-input');
 
 const landingView = document.getElementById('landing-view');
 const landingCompanyName = document.getElementById('landing-company-name');
@@ -209,6 +212,56 @@ document.getElementById('btn-change-company').addEventListener('click', () => {
   renderCompanyList();
 });
 
+// ---- 데이터 내보내기 / 가져오기 ----
+// localStorage는 브라우저·주소(origin)별로 분리되어 있어서, 코드를 새로 배포하거나
+// 다른 주소로 열면 수정한 내용이 안 보일 수 있다. 내보내기로 파일 백업을 만들어두고,
+// 필요할 때 가져오기로 복원할 수 있게 한다.
+btnExportData.addEventListener('click', () => {
+  const json = exportAllDataAsJSON();
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const today = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = 'interview-data-backup-' + today + '.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
+
+btnImportData.addEventListener('click', () => {
+  importDataFileInput.click();
+});
+
+importDataFileInput.addEventListener('change', async () => {
+  const file = importDataFileInput.files && importDataFileInput.files[0];
+  importDataFileInput.value = '';
+  if (!file) return;
+
+  let text;
+  try {
+    text = await file.text();
+  } catch (e) {
+    alert('파일을 읽는 중 문제가 발생했습니다.');
+    return;
+  }
+
+  showConfirmModal(
+    '가져오기를 하면 지금 이 브라우저에 있는 모든 기업 데이터가 파일 내용으로 대체됩니다.\n계속할까요?',
+    () => {
+      const result = importAllDataFromJSON(text);
+      if (!result.ok) {
+        alert(result.error);
+        return;
+      }
+      renderCompanyList();
+      alert('가져오기 완료: 기업 ' + result.companyCount + '개를 불러왔습니다.');
+    },
+    '가져오기'
+  );
+});
+
 // ---- 기업 추가 모달 ----
 let pendingUploadFile = null;
 
@@ -312,11 +365,20 @@ attachOverlayDismiss(modalAddCompany, () => {
 });
 
 // ================= 업로드 텍스트 파일 파싱 =================
-// "━━━" 구분선 사이의 텍스트가 카테고리 제목, "Q. "/"⭐ Q. "로 시작하는 줄이
-// 질문(⭐면 즐겨찾기), 다음 Q./구분선 전까지의 줄이 답변인 포맷을 파싱한다.
+// "━━━" 구분선 사이의 텍스트가 카테고리 제목, "Q. "로 시작하는 줄이 질문이다.
+// 질문 아래에 "키워드: "/"내용: " 마커가 있는 포맷(예: 한국증권금융 파일)과,
+// 마커 없이 바로 답변 문단이 이어지는 단순 포맷(예: ⭐ Q. 형태) 둘 다 지원한다.
+//  - "⭐"가 Q. 앞에 붙어있거나, 질문 제목이 "🔴"로 시작하면 즐겨찾기로 인식한다
+//    (🔴 = "반드시 답변 준비"급 핵심질문이라는 파일 자체의 표시 규칙을 그대로 활용).
+//  - "키워드: " 값은 "→"로 구분된 항목들을 키워드 배열로 쪼갠다.
+//  - "내용: " 마커가 한 번이라도 쓰인 질문은 원본 줄바꿈을 그대로 살려("\n"으로
+//    이어붙여) 답변에 담고, 마커가 전혀 없는 단순 포맷은 기존처럼 공백으로
+//    이어붙인 한 문단으로 만든다.
 // 형식이 어긋나는 줄을 만나도 경고만 남기고 파싱을 계속 진행한다.
 const SEPARATOR_LINE = /^[━─=—-]{5,}$/;
 const QUESTION_LINE = /^(⭐)?\s*Q\.\s*(.+)$/;
+const MARKER_KEYWORDS = '키워드:';
+const MARKER_CONTENT = '내용:';
 
 function parseCompanyTextFile(text) {
   const lines = text.split(/\r?\n/);
@@ -331,13 +393,31 @@ function parseCompanyTextFile(text) {
     categories.push(currentCategory);
   }
 
+  function appendToMode(q, chunk) {
+    const text2 = chunk.trim();
+    if (!text2) return;
+    if (q.mode === 'keywords') {
+      q.keywordsRaw = q.keywordsRaw ? q.keywordsRaw + ' ' + text2 : text2;
+    } else {
+      q.mode = 'answer'; // 마커가 없으면(단순 포맷) 기본적으로 답변으로 취급
+      q.answerLines.push(text2);
+    }
+  }
+
   function finalizeQuestion() {
     if (!currentQuestion) return;
-    const answer = currentQuestion.answerLines.join(' ').replace(/\s+/g, ' ').trim();
+    const answer = currentQuestion.usesMarkers
+      ? currentQuestion.answerLines.join('\n').trim()
+      : currentQuestion.answerLines.join(' ').replace(/\s+/g, ' ').trim();
+    const keywords = currentQuestion.keywordsRaw
+      .split('→')
+      .map((k) => k.trim())
+      .filter(Boolean);
     currentCategory.questions.push({
-      question: currentQuestion.question,
+      question: currentQuestion.title,
       answer,
       favorite: currentQuestion.favorite,
+      keywords,
     });
     currentQuestion = null;
   }
@@ -360,10 +440,14 @@ function parseCompanyTextFile(text) {
         ensureCategory('미분류');
       }
       justSawSeparator = false;
+      const title = qMatch[2].trim().replace(/\s*\/\s*$/, '');
       currentQuestion = {
-        question: qMatch[2].trim(),
-        favorite: !!qMatch[1],
+        title,
+        favorite: !!qMatch[1] || title.startsWith('🔴'),
         answerLines: [],
+        keywordsRaw: '',
+        mode: null,
+        usesMarkers: false,
       };
       return;
     }
@@ -375,17 +459,61 @@ function parseCompanyTextFile(text) {
       return;
     }
 
-    if (currentQuestion) {
-      currentQuestion.answerLines.push(line);
-    } else {
+    if (!currentQuestion) {
       warnings.push('(줄 ' + (idx + 1) + ') 질문/카테고리 문맥 밖의 텍스트를 건너뜁니다: "' + line.slice(0, 40) + '"');
+      return;
     }
+
+    // "키워드:"/"내용:" 마커를 줄 안 어디서든 찾아서 그 앞뒤로 잘라 처리한다.
+    // (원본 파일에 두 마커가 한 줄에 같이 쓰인 경우도 있어서, 줄 시작 여부와
+    // 상관없이 마커를 찾는 방식으로 짰다.)
+    let remaining = line;
+    for (;;) {
+      const kwIdx = remaining.indexOf(MARKER_KEYWORDS);
+      const ctIdx = remaining.indexOf(MARKER_CONTENT);
+      let markerIdx = -1;
+      let markerLen = 0;
+      let markerType = null;
+      if (kwIdx !== -1 && (ctIdx === -1 || kwIdx < ctIdx)) {
+        markerIdx = kwIdx;
+        markerLen = MARKER_KEYWORDS.length;
+        markerType = 'keywords';
+      } else if (ctIdx !== -1) {
+        markerIdx = ctIdx;
+        markerLen = MARKER_CONTENT.length;
+        markerType = 'answer';
+      }
+      if (markerIdx === -1) break;
+      currentQuestion.usesMarkers = true;
+      appendToMode(currentQuestion, remaining.slice(0, markerIdx));
+      currentQuestion.mode = markerType;
+      remaining = remaining.slice(markerIdx + markerLen);
+    }
+    appendToMode(currentQuestion, remaining);
   });
 
   finalizeQuestion();
 
   return { categories: categories.filter((c) => c.questions.length > 0), warnings };
 }
+
+// ---- 기본 제공 기업 시드 보장 ----
+// localStorage는 접속 주소(origin)별로 완전히 분리되어 있어서, 코드를 새로
+// 배포하거나 다른 주소(예: GitHub Pages)로 열면 그 주소에서는 처음 보는
+// 빈 저장소로 시작한다. "한국증권금융"은 이름이 같은 기업이 아직 없을 때만
+// 한 번 자동으로 만들어서, 어떤 주소에서 열든 항상 보이게 한다.
+(function ensureKoreaSecuritiesSeed() {
+  if (getCompanies().some((c) => c.name === '한국증권금융')) return;
+  const { categories, warnings } = parseCompanyTextFile(RAW_KOREA_SECURITIES);
+  if (warnings.length > 0) {
+    console.warn('[한국증권금융 시드 파싱] 형식이 예상과 다른 줄 ' + warnings.length + '개를 건너뛰었습니다:');
+    warnings.forEach((w) => console.warn('  ' + w));
+  }
+  createCompanyFromParsedCategories('한국증권금융', categories);
+  const qCount = categories.reduce((sum, c) => sum + c.questions.length, 0);
+  const favCount = categories.reduce((sum, c) => sum + c.questions.filter((q) => q.favorite).length, 0);
+  console.log('[한국증권금융 시드 생성] 카테고리 ' + categories.length + '개 / 질문 ' + qCount + '개 / 즐겨찾기 ' + favCount + '개');
+})();
 
 document.getElementById('btn-add-company-confirm').addEventListener('click', async () => {
   const name = addCompanyNameInput.value.trim();
@@ -605,14 +733,97 @@ function renderAccordion(categories, mode) {
   }
 }
 
+// 이름표 하나(대분류 타이틀 또는 소분류 라벨)를 인라인으로 수정할 수 있게
+// 만드는 공용 헬퍼. { button, form }을 반환하며, button은 이름표 옆에,
+// form은 그 아래 줄에 배치해서 쓴다.
+function createInlineRenameButton(labelEl, currentName, onSave) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'inline-rename__btn';
+  btn.textContent = '✏️';
+  btn.setAttribute('aria-label', '이름 수정');
+
+  const form = document.createElement('div');
+  form.className = 'inline-rename__form';
+  form.hidden = true;
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'qa-edit-input';
+
+  const buttons = document.createElement('div');
+  buttons.className = 'qa-edit-buttons';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'qa-cancel-btn';
+  cancelBtn.textContent = '취소';
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
+  saveBtn.className = 'qa-save-btn';
+  saveBtn.textContent = '저장';
+  buttons.appendChild(cancelBtn);
+  buttons.appendChild(saveBtn);
+  form.appendChild(input);
+  form.appendChild(buttons);
+
+  function enterRename() {
+    input.value = labelEl.textContent;
+    labelEl.hidden = true;
+    btn.hidden = true;
+    form.hidden = false;
+    input.focus();
+  }
+  function exitRename() {
+    form.hidden = true;
+    labelEl.hidden = false;
+    btn.hidden = false;
+  }
+
+  btn.addEventListener('click', enterRename);
+  cancelBtn.addEventListener('click', exitRename);
+  saveBtn.addEventListener('click', () => {
+    const newName = input.value.trim();
+    if (!newName || newName === labelEl.textContent) {
+      exitRename();
+      return;
+    }
+    onSave(newName);
+    labelEl.textContent = newName;
+    exitRename();
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveBtn.click();
+    }
+  });
+
+  return { button: btn, form };
+}
+
 function buildCategorySection(title, questions, mode) {
   const section = document.createElement('section');
   section.className = 'category';
 
+  const headingRow = document.createElement('div');
+  headingRow.className = 'category__heading-row';
+
   const heading = document.createElement('h2');
   heading.className = 'category__title';
   heading.textContent = title;
-  section.appendChild(heading);
+  headingRow.appendChild(heading);
+  section.appendChild(headingRow);
+
+  // 풀버전에서만 대분류 타이틀을 수정할 수 있게 한다. 같은 카테고리로 묶인
+  // 질문들은 모두 같은 categoryId를 갖고 있어서 첫 질문에서 가져오면 된다.
+  const categoryId = questions.length > 0 ? questions[0].categoryId : null;
+  if (mode === 'full' && categoryId) {
+    const { button, form } = createInlineRenameButton(heading, title, (newName) => {
+      updateCategoryName(categoryId, newName);
+    });
+    headingRow.appendChild(button);
+    section.appendChild(form);
+  }
 
   const list = document.createElement('div');
   list.className = 'qa-list';
@@ -620,10 +831,24 @@ function buildCategorySection(title, questions, mode) {
   let lastSub = null;
   for (const q of questions) {
     if (q.subcategory && q.subcategory !== lastSub) {
+      const subRow = document.createElement('div');
+      subRow.className = 'subcategory-row';
+
       const subEl = document.createElement('div');
       subEl.className = 'subcategory-label';
       subEl.textContent = q.subcategory;
-      list.appendChild(subEl);
+      subRow.appendChild(subEl);
+      list.appendChild(subRow);
+
+      if (mode === 'full' && categoryId) {
+        const originalSubName = q.subcategory;
+        const { button, form } = createInlineRenameButton(subEl, originalSubName, (newName) => {
+          updateSubcategoryName(categoryId, originalSubName, newName);
+        });
+        subRow.appendChild(button);
+        list.appendChild(form);
+      }
+
       lastSub = q.subcategory;
     } else if (!q.subcategory) {
       lastSub = null;

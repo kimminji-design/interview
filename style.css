@@ -206,6 +206,20 @@ body {
   max-width: 360px;
 }
 
+.company-backup-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.company-backup-hint {
+  max-width: 360px;
+  margin: 10px 0 0;
+  font-size: 0.76rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
 /* ---------- Landing ---------- */
 .landing {
   position: relative;
@@ -416,10 +430,17 @@ body {
   gap: 22px;
 }
 
+.category__heading-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
 .category__title {
   font-size: 1rem;
   font-weight: 800;
-  margin: 0 0 10px;
+  margin: 0;
   padding: 6px 12px;
   display: inline-block;
   border-radius: 8px;
@@ -433,12 +454,47 @@ body {
   gap: 10px;
 }
 
+.subcategory-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 2px 0;
+}
+
 .subcategory-label {
   font-size: 0.78rem;
   font-weight: 700;
   color: var(--text-muted);
-  margin: 4px 2px 0;
   letter-spacing: 0.02em;
+}
+
+.inline-rename__btn {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 2px 4px;
+  border-radius: 6px;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.inline-rename__btn:hover {
+  opacity: 1;
+  background: var(--accent-soft);
+}
+
+.inline-rename__form[hidden] {
+  display: none;
+}
+
+.inline-rename__form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 10px;
+  max-width: 420px;
 }
 
 .qa-item {

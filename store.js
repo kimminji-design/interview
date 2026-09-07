@@ -286,7 +286,9 @@ function createCompanyFromParsedCategories(name, parsedCategories) {
       answer: q.answer,
       subcategory: null,
       favorite: !!q.favorite,
-      keywords: [], // 업로드 파일에는 keywords 개념이 없음 — "키워드 수정"으로 직접 채운다
+      // 업로드 파일에 "키워드:" 마커로 된 키워드가 있었다면 그대로 쓰고,
+      // 없는 포맷이었다면 빈 배열로 시작해서 "키워드 수정"으로 직접 채운다.
+      keywords: Array.isArray(q.keywords) ? q.keywords.slice() : [],
     })),
   }));
 
@@ -366,6 +368,17 @@ function updateQuestionKeywords(questionId, keywords) {
   return loc.question;
 }
 
+// 대분류(카테고리) 타이틀을 바꾼다. 예: "폴라리스오피스 적합성" → 원하는 이름.
+function updateCategoryName(categoryId, newName) {
+  const company = getCurrentCompany();
+  if (!company) return null;
+  const category = company.categories.find((c) => c.id === categoryId);
+  if (!category) return null;
+  category.name = newName;
+  persistCompanyStore();
+  return category;
+}
+
 function toggleFavorite(questionId) {
   const loc = findQuestionLocation(questionId);
   if (!loc) return null;
@@ -396,4 +409,51 @@ function deleteQuestions(questionIds) {
     category.questions = category.questions.filter((q) => !idSet.has(q.id));
   }
   persistCompanyStore();
+}
+
+// 소분류(subcategory) 라벨을 바꾼다. subcategory는 별도 id 없이 질문마다 붙은
+// 문자열이라, 같은 카테고리 안에서 oldName과 일치하는 질문을 모두 newName으로 바꾼다.
+function updateSubcategoryName(categoryId, oldName, newName) {
+  const company = getCurrentCompany();
+  if (!company) return 0;
+  const category = company.categories.find((c) => c.id === categoryId);
+  if (!category) return 0;
+  let count = 0;
+  for (const q of category.questions) {
+    if (q.subcategory === oldName) {
+      q.subcategory = newName;
+      count += 1;
+    }
+  }
+  if (count > 0) persistCompanyStore();
+  return count;
+}
+
+// ================= 데이터 내보내기 / 가져오기 =================
+// 이 앱은 백엔드 없이 localStorage만 쓰기 때문에, 코드를 새로 배포하거나
+// (GitHub 등) 다른 주소·기기에서 열면 localStorage가 origin별로 완전히 분리돼
+// 있어서 이전에 수정한 내용이 안 보일 수 있다. 이 두 함수로 현재 데이터를
+// 파일 하나로 내보내/보관해두고, 필요할 때 다시 불러와 복원할 수 있게 한다.
+function exportAllDataAsJSON() {
+  return JSON.stringify(companyStore, null, 2);
+}
+
+// json: exportAllDataAsJSON()으로 내보냈던 문자열. 형식이 올바르면 현재
+// companyStore를 통째로 교체하고 저장한 뒤 true를 반환한다.
+function importAllDataFromJSON(json) {
+  let parsed;
+  try {
+    parsed = JSON.parse(json);
+  } catch (e) {
+    return { ok: false, error: '올바른 JSON 파일이 아닙니다.' };
+  }
+  if (!parsed || !Array.isArray(parsed.companies)) {
+    return { ok: false, error: '이 앱에서 내보낸 백업 파일 형식이 아닙니다.' };
+  }
+  companyStore = parsed;
+  if (!companyStore.selectedCompanyId && companyStore.companies.length > 0) {
+    companyStore.selectedCompanyId = companyStore.companies[0].id;
+  }
+  persistCompanyStore();
+  return { ok: true, companyCount: companyStore.companies.length };
 }

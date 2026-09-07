@@ -38,6 +38,15 @@
     <button id="btn-add-company" class="mode-btn company-add-btn">
       <span class="mode-btn__label">+ 기업 추가</span>
     </button>
+    <div class="company-backup-row">
+      <button id="btn-export-data" type="button" class="toolbar-btn">⬇ 데이터 내보내기</button>
+      <button id="btn-import-data" type="button" class="toolbar-btn">⬆ 데이터 가져오기</button>
+      <input id="import-data-file-input" type="file" accept=".json,application/json" class="modal__file-input" />
+    </div>
+    <p class="company-backup-hint">
+      수정한 내용은 이 브라우저에만 저장돼요. 다른 주소로 배포하거나 브라우저를 바꾸면 안 보일 수 있으니,
+      가끔 "내보내기"로 파일을 받아두면 "가져오기"로 언제든 복원할 수 있어요.
+    </p>
   </div>
 </div>
 
@@ -192,6 +201,7 @@
 </div>
 
 <script src="data.js"></script>
+<script src="data-koreasecurities.js"></script>
 <script src="parser.js"></script>
 <script src="store.js"></script>
 <script src="script.js"></script>
