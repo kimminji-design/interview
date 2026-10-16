@@ -25,6 +25,15 @@ export function validate(input) {
         if (q.keywords != null && (!Array.isArray(q.keywords) || q.keywords.some(x => typeof x !== 'string'))) throw new Error('키워드 형식이 올바르지 않습니다.');
         q.keywords ??= [];
         q.favorite = !!q.favorite;
+        if (q.followUps != null) {
+          if (!Array.isArray(q.followUps)) throw new Error('꼬리질문은 목록이어야 합니다.');
+          const followIds = new Set();
+          for (const f of q.followUps) {
+            checkId(f, followIds);
+            if (typeof f.question !== 'string' || !f.question.trim() || typeof f.answer !== 'string') throw new Error('꼬리질문의 질문과 답변을 확인해주세요.');
+            if (f.keywords != null && (!Array.isArray(f.keywords) || f.keywords.some(x => typeof x !== 'string'))) throw new Error('꼬리질문 키워드 형식이 올바르지 않습니다.');
+          }
+        }
       }
     }
   }
@@ -37,6 +46,7 @@ export function newCompany(name, source, ids, questionsOnly = false) {
     ...clone(cat), id: uid('cat'), questions: cat.questions.filter(q => !ids || ids.has(q.id)).map(q => ({
       ...clone(q), id: uid('q'), favorite: false, status: 'draft',
       ...(questionsOnly ? { answer: '', keywords: [] } : {}),
+      ...(q.followUps ? { followUps: q.followUps.map(f => ({ ...clone(f), id: uid('follow'), ...(questionsOnly ? { answer: '', keywords: [] } : {}) })) } : {}),
     })),
   })).filter(c => c.questions.length) : [] };
 }

@@ -23,6 +23,7 @@ process.on('exit',()=>server.kill());
    }
    return route.fulfill({json:{sha:String(sha),content:Buffer.from(JSON.stringify(remote)).toString('base64')}});
   });
+  await context.route('http://localhost:8765/interview-data.json',route=>route.fulfill({json:seed}));
   const page=await context.newPage();page.on('pageerror',e=>{errors.push(e.message);console.error('PAGE ERROR',e.message)});page.on('dialog',d=>d.accept());
   await page.goto('http://localhost:8765');await page.locator('#sync-status[data-state="saved"]').waitFor({timeout:7000}).catch(async e=>{console.log('STATUS',await page.locator('#sync-status').innerText());console.log('BODY',(await page.locator('body').innerText()).slice(0,500));throw e;});return {page,context};
  }

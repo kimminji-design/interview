@@ -1,5 +1,5 @@
-import { clone, uid, equal, count, flat, validate, documentOf, newCompany, mergeDocuments, move, suggestKeywords, parseBulk } from './core.mjs';
-import { GitHubSync, SEED_PATH } from './github-sync.mjs';
+import { clone, uid, equal, count, flat, validate, documentOf, newCompany, mergeDocuments, move, suggestKeywords, parseBulk } from './core.mjs?v=3';
+import { GitHubSync, SEED_PATH } from './github-sync.mjs?v=3';
 
 const $ = id => document.getElementById(id);
 const STORAGE = 'interviewWorkspace.v2', LEGACY = 'interviewCompanyData.v1';
@@ -85,7 +85,8 @@ function conflictName(path, local, remote) {
     const company = all.find(c => c.id === p); if (company) return company.name;
     const category = all.flatMap(c => c.categories).find(c => c.id === p); if (category) return category.name;
     const question = all.flatMap(c => c.categories.flatMap(k => k.questions)).find(q => q.id === p); if (question) return question.question;
-    return { companies: '', categories: '', questions: '', answer: '답변', question: '질문', keywords: '키워드', favorite: '중요 표시', status: '준비 상태', name: '이름' }[p] ?? p;
+    const follow = all.flatMap(c => c.categories.flatMap(k => k.questions.flatMap(q => q.followUps || []))).find(f => f.id === p); if (follow) return follow.question;
+    return { companies: '', categories: '', questions: '', followUps: '꼬리질문', answer: '답변', question: '질문', keywords: '키워드', favorite: '중요 표시', status: '준비 상태', name: '이름' }[p] ?? p;
   }).filter(Boolean).join(' › ');
 }
 function resolveConflicts(base, local, remote, conflicts) {
@@ -147,7 +148,8 @@ function render() {
   });
   $('company-title').textContent=company?.name||'새 기업을 추가해보세요';
   const qs=company?flat(company):[];
-  $('company-count').textContent=`전체 ${qs.length} · 중요 ${qs.filter(q=>q.favorite).length} · 준비 완료 ${qs.filter(q=>q.status==='ready').length}`;
+  const follows=qs.reduce((n,q)=>n+(q.followUps?.length||0),0);
+  $('company-count').textContent=`기본 ${qs.length} · 꼬리 ${follows} · 중요 ${qs.filter(q=>q.favorite).length} · 준비 완료 ${qs.filter(q=>q.status==='ready').length}`;
   for(const id of ['add-question-btn','company-menu-btn','copy-questions-btn','bulk-btn','category-btn']) $(id).disabled=!company;
   const oldFilter=$('category-filter').value;$('category-filter').replaceChildren(option('all','전체 카테고리'));
   company?.categories.forEach(c=>$('category-filter').append(option(c.id,c.name)));
@@ -162,7 +164,21 @@ function filtered() {
   return (current()?flat(current()):[]).filter(q=>
     (view!=='starred'||q.favorite)&&(category==='all'||q.categoryId===category)&&
     (status==='all'||status==='empty'&&!q.answer.trim()||status==='favorite'&&q.favorite||(q.status||'draft')===status)&&
-    (!text||[q.question,q.answer,...q.keywords].join(' ').toLowerCase().includes(text)));
+    (!text||[q.question,q.answer,...q.keywords,...(q.followUps||[]).flatMap(f=>[f.question,f.answer,...(f.keywords||[])])].join(' ').toLowerCase().includes(text)));
+}
+function followUpPanel(q) {
+  if(!q.followUps?.length)return null;
+  const panel=el('details','follow-ups'),summary=el('summary');
+  summary.append(el('span','',`꼬리질문 ${q.followUps.length}개`),el('span','follow-hint','필요할 때 펼쳐보기'));
+  panel.append(summary);
+  const list=el('div','follow-list');
+  q.followUps.forEach((f,i)=>{
+    const item=el('details','follow-item'),title=el('summary','',`${i+1}. ${f.question}`),content=el('div','follow-answer');
+    if(f.keywords?.length){const chips=el('div','chips');f.keywords.forEach(k=>chips.append(el('span','chip',k)));content.append(chips);}
+    content.append(el('p','answer',f.answer||'아직 답변이 없습니다.'));
+    item.append(title,content);list.append(item);
+  });
+  panel.append(list);return panel;
 }
 function starButton(q) {
   const b=btn(q.favorite?'★':'☆',e=>{e.preventDefault();e.stopPropagation();const loc=locate(q.id);loc.q.favorite=!loc.q.favorite;changed();render();},'star'+(q.favorite?' on':''));
@@ -181,12 +197,14 @@ function renderList() {
       if(view==='manage'){
         const row=el('div','question-row');const check=input();check.type='checkbox';check.checked=selected.has(q.id);check.setAttribute('aria-label','선택: '+q.question);check.onchange=()=>{check.checked?selected.add(q.id):selected.delete(q.id);renderList();};
         const main=btn('',()=>editQuestion(q.id),'question-main');main.append(el('span','question-title',q.question),el('span','question-preview',q.answer.replace(/\s+/g,' ')||'답변을 작성해주세요'));
+        if(q.followUps?.length)main.append(el('span','follow-count',`↳ 꼬리질문 ${q.followUps.length}개`));
         const reorder=el('div','reorder');for(const [arrow,offset]of[['↑',-1],['↓',1]]){const b=btn(arrow,()=>{move(cat.questions,q.id,offset);changed();renderList();});b.disabled=cat.questions.findIndex(x=>x.id===q.id)+(offset)<0||cat.questions.findIndex(x=>x.id===q.id)+offset>=cat.questions.length;b.setAttribute('aria-label',q.question+' '+(offset<0?'위로':'아래로'));reorder.append(b);}
         row.append(check,starButton(q),main,el('span','status-badge status-'+(q.status||'draft'),statuses[q.status]||statuses.draft),reorder);root.append(row);
       }else{
         const card=el('details','study-card');const summary=el('summary');summary.append(el('span','question-title',q.question),starButton(q));const body=el('div','study-body');
         const chips=el('div','chips');q.keywords.forEach(k=>chips.append(el('span','chip',k)));body.append(chips);
         if(!$('keyword-only').checked)body.append(el('p','answer',q.answer||'아직 답변이 없습니다.'));else if(!q.keywords.length)body.append(el('p','muted','키워드가 없어요. 수정에서 답변 속 문구를 선택해 추가할 수 있어요.'));
+        const follows=followUpPanel(q);if(follows)body.append(follows);
         body.append(btn('질문·답변 수정',()=>editQuestion(q.id)));card.append(summary,body);root.append(card);
       }
     });
@@ -206,13 +224,31 @@ function editQuestion(id=null) {
   function addKeyword(value){const keys=keywordInput.value.split(/→|,|\n/).map(x=>x.trim()).filter(Boolean);if(value&&!keys.includes(value)){keywordInput.value=[...keys,value].join(' → ');editorDirty=true;}}
   const tools=el('div','keyword-tools'),suggestions=el('div','suggestions');
   tools.append(btn('선택한 답변 문구 추가',()=>{if(!selection)return message('답변에서 기억할 문구를 먼저 선택해주세요.');addKeyword(selection);}),btn('키워드 추천',()=>{suggestions.replaceChildren();const list=suggestKeywords(answer.value);if(!list.length)suggestions.append(el('p','muted','추천할 문구가 없어요. 답변에서 중요한 부분을 선택해 추가해보세요.'));list.forEach(k=>suggestions.append(btn('+ '+k,()=>addKeyword(k))));}));body.append(tools,suggestions);
+  const followDraft=clone(existing?.q.followUps||[]),followEditor=el('details','follow-editor'),followSummary=el('summary'),followList=el('div','follow-editor-list');
+  followEditor.append(followSummary,el('p','muted','기본 답변에는 섞이지 않습니다. 연습할 때 필요하면 펼쳐볼 수 있어요.'),followList);
+  function drawFollowEditor(focusId=null){
+    followSummary.textContent=`꼬리질문 관리 · ${followDraft.length}개`;followList.replaceChildren();
+    followDraft.forEach((f,i)=>{
+      const row=el('section','follow-edit-row'),head=el('div','follow-edit-head');head.append(el('strong','',`꼬리질문 ${i+1}`));
+      for(const [arrow,offset]of[['↑',-1],['↓',1]]){const b=btn(arrow,()=>{move(followDraft,f.id,offset);editorDirty=true;drawFollowEditor(f.id);},'small');b.disabled=i+offset<0||i+offset>=followDraft.length;b.setAttribute('aria-label',`꼬리질문 ${i+1} ${offset<0?'위로':'아래로'}`);head.append(b);}
+      const remove=btn('삭제',()=>{followDraft.splice(i,1);editorDirty=true;drawFollowEditor();},'small danger');remove.setAttribute('aria-label',`꼬리질문 ${i+1} 삭제`);head.append(remove);row.append(head);
+      const title=field(row,`꼬리질문 ${i+1} 질문`,input(f.question));title.oninput=()=>f.question=title.value;
+      const text=el('textarea','follow-textarea');text.rows=4;text.value=f.answer;field(row,`꼬리질문 ${i+1} 답변`,text);text.oninput=()=>f.answer=text.value;
+      const keys=field(row,`꼬리질문 ${i+1} 키워드 (선택)`,input((f.keywords||[]).join(' → ')));keys.oninput=()=>f.keywords=keys.value.split(/→|,|\n/).map(x=>x.trim()).filter(Boolean);
+      followList.append(row);if(focusId===f.id)queueMicrotask(()=>title.focus());
+    });
+  }
+  followEditor.append(btn('+ 꼬리질문 추가',()=>{const f={id:uid('follow'),question:'',answer:'',keywords:[]};followDraft.push(f);followEditor.open=true;editorDirty=true;drawFollowEditor(f.id);},'small'));
+  drawFollowEditor();body.append(followEditor);
   const favorite=input();favorite.type='checkbox';favorite.checked=!!existing?.q.favorite;const favLabel=el('label','field','중요 질문으로 표시');favLabel.prepend(favorite);body.append(favLabel);
   const err=errorBox(body);body.addEventListener('input',()=>editorDirty=true);
   function save(){
     if(staleTab){err.textContent='다른 탭에서 내용이 변경됐어요. 입력 내용을 복사한 뒤 새로고침해주세요.';return;}
     if(!question.value.trim()||!category.value.trim()){err.textContent='질문과 카테고리를 입력해주세요.';return;}
+    if(followDraft.some(f=>!f.question.trim())){err.textContent='비어 있는 꼬리질문의 질문을 입력하거나 삭제해주세요.';followEditor.open=true;return;}
     let target=company.categories.find(c=>c.name===category.value.trim());if(!target){target={id:uid('cat'),name:category.value.trim(),questions:[]};company.categories.push(target);}
     const q={...(existing?clone(existing.q):{id:uid('q'),subcategory:null}),question:question.value.trim(),answer:answer.value.trim(),keywords:[...new Set(keywordInput.value.split(/→|,|\n/).map(x=>x.trim()).filter(Boolean))],favorite:favorite.checked,status:status.value};
+    if(followDraft.length||existing?.q.followUps)q.followUps=followDraft.map(f=>({...f,question:f.question.trim(),answer:f.answer.trim(),keywords:[...new Set(f.keywords||[])]}));
     if(existing&&existing.cat.id===target.id)existing.cat.questions[existing.cat.questions.findIndex(x=>x.id===id)]=q;
     else{if(existing)existing.cat.questions=existing.cat.questions.filter(x=>x.id!==id);target.questions.push(q);}
     changed();closeDialog(true);render();message('저장했어요.');
@@ -316,7 +352,7 @@ function renderLive(){
   if(s.index>=s.questions.length){card.append(el('h2','','준비한 질문을 모두 연습했어요.'),btn('다시 설정하기',()=>{stopLive();renderLive();},'primary'));root.append(card);return;}
   const q=s.questions[s.index],meta=el('div','live-meta'),timer=el('span','',`${Math.floor((Date.now()-s.start)/1000)}초`);meta.append(el('span','',`${s.index+1} / ${s.questions.length}`),timer);card.append(meta,el('h2','live-question',q.question));
   if(!s.reveal)clock=setInterval(()=>timer.textContent=`${Math.floor((Date.now()-s.start)/1000)}초`,1000);
-  if(s.reveal){const chips=el('div','chips');q.keywords.forEach(k=>chips.append(el('span','chip',k)));card.append(chips,el('p','answer',q.answer||'아직 답변이 없습니다.'));}
+  if(s.reveal){const chips=el('div','chips');q.keywords.forEach(k=>chips.append(el('span','chip',k)));card.append(chips,el('p','answer',q.answer||'아직 답변이 없습니다.'));const follows=followUpPanel(q);if(follows)card.append(follows);}
   const actions=el('div','actions');actions.append(btn(s.reveal?'다음 질문':'답변 확인',()=>{if(s.reveal){s.index++;s.reveal=false;s.start=Date.now();}else s.reveal=true;renderLive();},'primary'),btn('종료',()=>{stopLive();renderLive();}));card.append(actions);root.append(card);
 }
 

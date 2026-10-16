@@ -54,3 +54,12 @@ node tests/browser.cjs
 GitHub 공식 문서:
 - https://docs.github.com/en/rest/repos/contents#create-or-update-file-contents
 - https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens
+
+## 꼬리질문
+
+- 질문 편집 창의 **꼬리질문 관리**에서 질문·답변·선택 키워드를 추가하고, 위/아래로 순서를 바꿀 수 있습니다. 부모 질문을 저장할 때 함께 저장됩니다.
+- **전체 연습 / 중요 질문**에서 기본 답변 아래의 **꼬리질문 N개**를 펼치면 목록이 나옵니다. 각 질문을 눌러 답변을 볼 수 있습니다. 기본값은 접힘이며, 중요 질문이나 연습 문항 수에 별도 문항으로 섞이지 않습니다.
+- **실전 연습**은 기본 답변을 확인한 후 꼬리질문을 선택해서 볼 수 있습니다. 다음 문항에서는 다시 접힙니다.
+- 검색에는 꼬리질문과 답변·키워드도 포함됩니다. 기업별 JSON 내보내기·가져오기와 GitHub 동기화에도 함께 보존됩니다.
+- 데이터 형식은 부모 문항의 선택 필드 `followUps: [{id, question, answer, keywords?}]`입니다. 기존 JSON에는 이 필드가 없어도 됩니다.
+- 다른 기업으로 **질문만 복사**하면 꼬리질문도 복사하되 답변·키워드는 비웁니다.

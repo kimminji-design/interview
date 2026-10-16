@@ -32,3 +32,24 @@ test('first sync reads existing seed; explicit write creates common file without
  }});
  sync.connect('test');assert.ok(await sync.sync(true));assert.equal(calls.length,3);const put=JSON.parse(calls[2].opts.body);assert.equal(Object.hasOwn(put,'sha'),false);assert.ok(calls[1].url.includes('backup-2026-09-07.json'));
 });
+
+test('follow-up validation preserves old data and rejects malformed nested questions',()=>{
+ const old=fixture();assert.deepEqual(validate(old),old);
+ const d=fixture();question(d).followUps=[{id:'f1',question:'추가 질문',answer:'답변',keywords:['키워드']}];
+ assert.deepEqual(validate(d),d);
+ question(d).followUps.push({...question(d).followUps[0]});assert.throws(()=>validate(d),/중복/);
+ question(d).followUps=[{id:'f1',question:'',answer:'답변'}];assert.throws(()=>validate(d),/꼬리질문/);
+ question(d).followUps='잘못된 값';assert.throws(()=>validate(d),/목록/);
+});
+test('question-only copy clears follow-up answers and creates new IDs without changing source',()=>{
+ const d=fixture(),source=d.companies[0];question(d).followUps=[{id:'f1',question:'추가 질문',answer:'다른 회사 답변',keywords:['다른 회사']}];
+ const before=clone(source);const copied=newCompany('새 회사',source,null,true).categories[0].questions[0];
+ assert.equal(copied.followUps[0].answer,'');assert.deepEqual(copied.followUps[0].keywords,[]);assert.notEqual(copied.followUps[0].id,'f1');assert.deepEqual(source,before);
+});
+test('independent follow-up edits merge; conflicting answers and edit-versus-delete require a choice',()=>{
+ const b=fixture();question(b).followUps=[{id:'f1',question:'추가1',answer:'답1'},{id:'f2',question:'추가2',answer:'답2'}];
+ const l=clone(b),r=clone(b);question(l).followUps[0].answer='로컬';question(r).followUps[1].answer='원격';
+ const merged=mergeDocuments(b,l,r);assert.equal(merged.conflicts.length,0);assert.deepEqual(question(merged.data).followUps.map(f=>f.answer),['로컬','원격']);
+ question(r).followUps[0].answer='동시수정';assert.equal(mergeDocuments(b,l,r).conflicts.length,1);
+ question(r).followUps.shift();assert.equal(mergeDocuments(b,l,r).conflicts.length,1);
+});

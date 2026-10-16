@@ -1,4 +1,4 @@
-import { validate, documentOf, mergeDocuments, equal, clone } from './core.mjs';
+import { validate, documentOf, mergeDocuments, equal, clone } from './core.mjs?v=3';
 
 export const REPO = 'kimminji-design/interview';
 export const DATA_PATH = 'interview-data.json';
