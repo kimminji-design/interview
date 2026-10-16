@@ -44,3 +44,33 @@
   .reading-options{margin:0 0 12px}
   #mobile-tools-body .sync-controls{max-width:100%}
 }
+/* Restore the original interviewer photo as an immersive practice stage. */
+.live-setup{max-width:440px;padding:24px;margin:22px auto}
+.live-setup h2{font-size:19px;margin-bottom:10px}
+.live-setup .field-row{gap:10px;margin-bottom:20px}
+.live-setup .field{margin-top:6px}
+.live-setup .muted{font-size:13px}
+body.live-running{overflow:hidden}
+#live.live-stage{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:flex-end;flex-direction:column;padding:70px 18px max(18px,env(safe-area-inset-bottom));background:#e6e8ec url('assets/bg.png') center 45% / cover no-repeat;isolation:isolate}
+#live.live-stage::before{content:'';position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,#10182815 0%,transparent 48%,#10182850 100%);pointer-events:none}
+.live-toolbar{position:absolute;top:max(16px,env(safe-area-inset-top));left:18px;right:18px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.live-toolbar .live-meta{margin:0;gap:18px;color:white;background:#182033c9;border-radius:24px;padding:10px 16px;font-size:13px;font-variant-numeric:tabular-nums}
+.live-toolbar .live-exit{border:1px solid #ffffff55;background:#182033c9;color:white;border-radius:24px;font-size:13px;min-height:42px}
+.live-stage .live-card{width:100%;max-width:580px;margin:0;padding:16px 20px;border-radius:12px;background:#fffffff5;border-color:#ffffffb3}
+.live-speaker{font-size:11px;color:var(--muted);margin-bottom:6px}
+.live-stage .live-question{font-size:17px;line-height:1.55;margin:0;max-height:18dvh;overflow:auto}
+.live-stage .actions{margin-top:12px;gap:8px}
+.live-stage .actions button{font-size:13px;padding:8px 14px;min-height:40px}
+.live-response{max-height:min(32dvh,290px);overflow-y:auto;overscroll-behavior:contain;margin-top:12px;padding-right:8px;border-top:1px solid var(--line);scrollbar-gutter:stable}
+.live-response .answer{font-size:15px;line-height:1.85;margin:10px 0 14px}
+.live-response .chips{margin:12px 0 8px;gap:5px}
+.live-response .chip{padding:4px 7px;font-size:11px}
+@media(max-width:700px){
+  #live.live-stage{padding:65px 12px max(12px,env(safe-area-inset-bottom));background-position:center 45%}
+  .live-stage .live-card{padding:14px 16px}
+  .live-stage .live-question{font-size:16px}
+  .live-toolbar{left:12px;right:12px}
+  .live-setup{padding:20px;margin:16px 0}
+  .live-setup .field-row{grid-template-columns:1fr 1fr}
+  .live-setup select{font-size:13px;padding:9px 6px}
+}

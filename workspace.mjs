@@ -374,19 +374,21 @@ function batchKeywords(){
   if(!proposals.length)body.append(el('p','muted','추천할 빈 키워드가 없어요. 개별 수정에서 답변 문구를 선택해 추가할 수 있습니다.'));
   footer(body,btn('취소',()=>closeDialog()),btn('확인한 키워드 적용',()=>{let n=0;for(const {q,check,text}of proposals){if(check.checked){locate(q.id).q.keywords=[...new Set(text.value.split(/→|,|\n/).map(x=>x.trim()).filter(Boolean))];n++;}}if(n){changed();render();}closeDialog(true);message(`${n}개 문항의 키워드를 저장했어요.`);},'primary'));
 }
-function stopLive(){clearInterval(clock);liveSession=null;}
+function stopLive(){clearInterval(clock);liveSession=null;$('live').classList.remove('live-stage');document.body.classList.remove('live-running');}
 function renderLive(){
   const root=$('live');root.replaceChildren();
+  const running=!!liveSession&&liveSession.index<liveSession.questions.length;
+  root.classList.toggle('live-stage',running);document.body.classList.toggle('live-running',running);
   if(!liveSession){
-    const card=el('div','live-card');card.append(el('p','eyebrow','PRACTICE OUT LOUD'),el('h2','','한 질문씩, 내 말로 답해보세요.'),el('p','muted','답변을 먼저 가리고 시간을 재며 연습합니다. 중요 질문 또는 전체 질문을 선택할 수 있어요.'));
-    const scope=el('select');scope.append(option('favorite','중요 질문'),option('all','전체 질문'));field(card,'연습 범위',scope);const order=el('select');order.append(option('ordered','정해둔 순서대로'),option('random','무작위 순서'));field(card,'질문 순서',order);
+    const card=el('div','live-card live-setup');card.append(el('p','eyebrow','PRACTICE OUT LOUD'),el('h2','','한 질문씩, 내 말로 답해보세요.'),el('p','muted','답변을 먼저 가리고 시간을 재며 연습합니다. 중요 질문 또는 전체 질문을 선택할 수 있어요.'));
+    const settings=el('div','field-row');card.append(settings);const scope=el('select');scope.append(option('favorite','중요 질문'),option('all','전체 질문'));field(settings,'연습 범위',scope);const order=el('select');order.append(option('ordered','정해둔 순서대로'),option('random','무작위 순서'));field(settings,'질문 순서',order);
     card.append(btn('연습 시작',()=>{let qs=current()?flat(current()).filter(q=>scope.value==='all'||q.favorite):[];if(!qs.length)return message('연습할 질문이 없어요. 중요 표시를 하거나 전체 질문을 선택해주세요.');if(order.value==='random'){qs=[...qs];for(let i=qs.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[qs[i],qs[j]]=[qs[j],qs[i]];}}liveSession={questions:qs,index:0,reveal:false,start:Date.now()};renderLive();},'primary'));root.append(card);return;
   }
   clearInterval(clock);const s=liveSession,card=el('div','live-card');
   if(s.index>=s.questions.length){card.append(el('h2','','준비한 질문을 모두 연습했어요.'),btn('다시 설정하기',()=>{stopLive();renderLive();},'primary'));root.append(card);return;}
-  const q=s.questions[s.index],meta=el('div','live-meta'),timer=el('span','',`${Math.floor((Date.now()-s.start)/1000)}초`);meta.append(el('span','',`${s.index+1} / ${s.questions.length}`),timer);card.append(meta,el('h2','live-question',q.question));
+  const q=s.questions[s.index],meta=el('div','live-meta'),timer=el('span','',`${Math.floor((Date.now()-s.start)/1000)}초`);meta.append(el('span','',`${s.index+1} / ${s.questions.length}`),timer);const toolbar=el('div','live-toolbar');toolbar.append(btn('연습 종료',()=>{stopLive();renderLive();},'live-exit'),meta);root.append(toolbar);card.append(el('p','live-speaker','면접관'),el('h2','live-question',q.question));
   if(!s.reveal)clock=setInterval(()=>timer.textContent=`${Math.floor((Date.now()-s.start)/1000)}초`,1000);
-  if(s.reveal){const chips=el('div','chips');q.keywords.forEach(k=>chips.append(el('span','chip',k)));card.append(chips,answerNode(q.answer));const follows=followUpPanel(q);if(follows)card.append(follows);}
+  if(s.reveal){const response=el('div','live-response');response.tabIndex=0;response.setAttribute('role','region');response.setAttribute('aria-label','모범 답변과 꼬리질문');const chips=el('div','chips');q.keywords.forEach(k=>chips.append(el('span','chip',k)));response.append(chips,answerNode(q.answer));const follows=followUpPanel(q);if(follows)response.append(follows);card.append(response);}
   const actions=el('div','actions');actions.append(btn(s.reveal?'다음 질문':'답변 확인',()=>{if(s.reveal){s.index++;s.reveal=false;s.start=Date.now();}else s.reveal=true;renderLive();},'primary'),btn('종료',()=>{stopLive();renderLive();}));card.append(actions);root.append(card);
 }
 
