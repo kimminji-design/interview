@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light"><title>면접 준비 노트</title>
-<link rel="stylesheet" href="workspace.css?v=3">
+<link rel="stylesheet" href="workspace.css?v=4">
 </head>
 <body>
 <section id="gate" class="gate">
@@ -27,6 +27,7 @@
     <main id="main-content">
       <div class="page-heading"><div><p class="eyebrow">MY INTERVIEW WORKSPACE</p><h1 id="company-title"></h1><p id="company-count" class="muted"></p></div><div class="actions"><button id="company-menu-btn">기업 관리</button><button id="add-question-btn" class="primary">+ 질문 추가</button></div></div>
       <div class="tabs" role="tablist" aria-label="화면 모드"><button data-view="manage" role="tab">질문 관리</button><button data-view="study" role="tab">전체 연습</button><button data-view="starred" role="tab">중요 질문</button><button data-view="live" role="tab">실전 연습</button></div>
+      <div class="reading-options"><label><input id="breathing-toggle" type="checkbox" checked> 호흡 줄바꿈</label></div>
       <section id="workspace">
         <div class="filters"><input id="search" type="search" aria-label="질문 답변 검색" placeholder="질문·답변·꼬리질문 검색"><select id="category-filter" aria-label="카테고리 필터"></select><select id="status-filter" aria-label="준비 상태"><option value="all">모든 상태</option><option value="draft">작성 중</option><option value="review">검토 필요</option><option value="ready">준비 완료</option><option value="empty">답변 없음</option><option value="favorite">중요 질문</option></select><button id="category-btn">분류 / 순서</button></div>
         <div class="list-meta"><span id="result-count"></span><label id="keyword-only-label"><input type="checkbox" id="keyword-only"> 키워드만 보기</label><button id="copy-questions-btn">다른 기업에서 가져오기</button><button id="bulk-btn">여러 문항 붙여넣기</button></div>
@@ -36,8 +37,10 @@
       <section id="live" hidden></section>
     </main>
   </div>
+<button id="mobile-menu-btn" class="mobile-menu-btn" aria-haspopup="dialog" aria-controls="mobile-tools">기업 · 설정</button>
 </div>
+<dialog id="mobile-tools" aria-labelledby="mobile-tools-title"><div class="mobile-tools-heading"><h2 id="mobile-tools-title">기업 · 설정</h2><button id="mobile-menu-close" aria-label="메뉴 닫기">닫기</button></div><div id="mobile-tools-body"></div></dialog>
 <dialog id="dialog"><div id="dialog-body"></div></dialog>
 <div id="toast" role="status" hidden></div>
-<script type="module" src="workspace.mjs?v=3"></script>
+<script type="module" src="workspace.mjs?v=4"></script>
 </body></html>

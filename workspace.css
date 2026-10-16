@@ -20,3 +20,27 @@
 .follow-edit-row{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:14px}.follow-edit-head{display:flex;align-items:center;gap:6px;font-size:13px}.follow-edit-head strong{margin-right:auto}
 .follow-edit-row .field{margin-top:12px}.follow-textarea{min-height:110px;font-size:14px}
 @media(max-width:700px){.follow-hint{display:none}.follow-ups>summary{min-height:48px}.follow-answer{padding-left:8px}.follow-edit-row{padding:12px}.follow-editor{padding-left:10px;padding-right:10px}}
+/* Reading mode: source answers stay editable; line breaks are presentation only. */
+.answer{word-break:keep-all;overflow-wrap:break-word}
+.reading-options{display:flex;justify-content:flex-end;margin:-8px 0 16px;color:var(--muted);font-size:12px}
+.mobile-menu-btn{display:none}
+#mobile-tools{padding:0;width:440px;max-height:85dvh}
+.mobile-tools-heading{display:flex;align-items:center;justify-content:space-between;padding:18px 18px 12px;border-bottom:1px solid var(--line)}
+.mobile-tools-heading h2{margin:0;font-size:18px}
+#mobile-tools-body .app-header{position:static;display:flex;padding:18px;border:0}
+#mobile-tools-body .brand{display:none}
+#mobile-tools-body .sidebar{display:flex;border-right:0;padding:18px}
+#mobile-tools-body #companies{display:grid;overflow:visible}
+#mobile-tools-body .page-heading{display:flex;padding:18px;margin:0;gap:12px}
+#mobile-tools-body .eyebrow{display:none}
+#mobile-tools-body .sidebar-footer{margin-top:16px}
+@media(max-width:700px){
+  #app .app-header,#app .sidebar,#app .page-heading{display:none}
+  #app .shell{min-height:100dvh}
+  #app main{padding:0 14px 88px}
+  .tabs{gap:0;justify-content:space-between;margin-bottom:16px}
+  .tabs button{font-size:13px;padding:15px 2px;min-height:48px}
+  .mobile-menu-btn{display:block;position:fixed;right:14px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:12;background:#fff;border-color:#cbd2df;border-radius:24px;padding:10px 15px;min-height:44px;font-size:12px;box-shadow:0 2px 8px #18233a12}
+  .reading-options{margin:0 0 12px}
+  #mobile-tools-body .sync-controls{max-width:100%}
+}

@@ -21,7 +21,8 @@ process.on('exit',()=>server.kill());
    return route.fulfill({json:{sha:String(sha),content:Buffer.from(JSON.stringify(remote)).toString('base64')}});
   });
   const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
-  await page.goto('http://localhost:8766');await page.locator('#sync-status[data-state="saved"]').waitFor();
+  await page.goto('http://localhost:8766');await page.locator('#sync-status[data-state="saved"]').waitFor({state:'attached'});
+  if(viewport.width<=700) await page.locator('#mobile-menu-btn').click();
   await page.locator('#companies button').filter({hasText:'골프존'}).click();return{page,context};
  }
  const {page}=await setup({width:1440,height:1000});
@@ -62,7 +63,7 @@ process.on('exit',()=>server.kill());
  assert.equal(exported.companies[0].categories.flatMap(c=>c.questions).find(q=>q.id==='golfzon_app').followUps[1].answer,'휴대폰에도 보이는 답변');await page.getByRole('button',{name:'닫기',exact:true}).last().click();
  // Write mock and read in independent mobile context.
  await page.locator('#settings-btn').click();await page.getByLabel('GitHub 연결 키',{exact:true}).fill('test-not-a-credential');
- await page.getByLabel('내가 저장하는 질문·답변이 이 공개 GitHub 저장소에 공개되는 것을 이해하고 동의합니다.').check();await page.getByRole('button',{name:'연결하고 동기화'}).click();await page.locator('#sync-status[data-state="saved"]').waitFor();assert.equal(puts,1);
+ await page.getByLabel('내가 저장하는 질문·답변이 이 공개 GitHub 저장소에 공개되는 것을 이해하고 동의합니다.').check();await page.getByRole('button',{name:'연결하고 동기화'}).click();await page.locator('#sync-status[data-state="saved"]').waitFor({state:'attached'});assert.equal(puts,1);
  const mobile=await setup({width:390,height:844});const m=mobile.page;
  await m.locator('[data-view="starred"]').click();assert.equal(await m.locator('.study-card').count(),12);
  const mc=m.locator('.study-card').filter({has:m.locator('.question-title',{hasText:'골프존 앱을 사용해 봤나요?'})});await mc.locator(':scope > summary').click();await mc.locator('.follow-ups > summary').click();

@@ -1,3 +1,4 @@
+import { breathingText, newestCompanies } from './reading.mjs?v=4';
 import { clone, uid, equal, count, flat, validate, documentOf, newCompany, mergeDocuments, move, suggestKeywords, parseBulk } from './core.mjs?v=3';
 import { GitHubSync, SEED_PATH } from './github-sync.mjs?v=3';
 
@@ -21,7 +22,8 @@ function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.
 function btn(text, action, cls = '') { const b = el('button', cls, text); b.type = 'button'; b.onclick = action; return b; }
 function option(value, text) { const o = el('option', '', text); o.value = value; return o; }
 function message(text) { $('toast').textContent = text; $('toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').hidden = true, 4500); }
-function current() { return state.data.companies.find(c => c.id === state.selected) || state.data.companies[0]; }
+function orderedCompanies() { return newestCompanies(state.data.companies); }
+function current() { return state.data.companies.find(c => c.id === state.selected) || orderedCompanies()[0]; }
 function localSave() {
   if (staleTab || storageBroken) return false;
   try { state.revision++; localStorage.setItem(STORAGE, JSON.stringify(state)); return true; }
@@ -39,13 +41,14 @@ function changed() {
   if (sync.token) saveTimer = setTimeout(() => runSync(true), 2200);
 }
 function safeSelection() {
-  if (!state.data.companies.some(c => c.id === state.selected)) state.selected = state.data.companies[0]?.id || null;
+  if (!state.data.companies.some(c => c.id === state.selected)) state.selected = orderedCompanies()[0]?.id || null;
 }
 function download(data, name) {
   const a = el('a'); const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   a.href = url; a.download = name.replace(/[\\/:*?"<>|]/g, '_') + '.json'; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 function openDialog(title, wide = false) {
+  closeMobileTools();
   if ($('dialog').open) { if (!closeDialog()) return null; }
   const body = $('dialog-body'); body.replaceChildren(); $('dialog').classList.toggle('wide', wide);
   const heading = el('div', 'dialog-heading'); heading.append(el('h2', '', title), btn('×', () => closeDialog())); heading.lastChild.setAttribute('aria-label', '닫기'); body.append(heading);
@@ -56,6 +59,35 @@ function closeDialog(force = false) {
   editorDirty = false; $('dialog').close(); const cleanup = dialogCleanup; dialogCleanup = null; if (cleanup) cleanup(); return true;
 }
 $('dialog').addEventListener('cancel', e => { e.preventDefault(); closeDialog(); });
+// The same management controls move into a small-screen drawer; IDs/handlers stay intact.
+const mobileSlots = [];
+function closeMobileTools() {
+  for (const {node, marker} of mobileSlots) { marker.replaceWith(node); }
+  mobileSlots.length = 0;
+  if ($('mobile-tools').open) $('mobile-tools').close();
+  $('mobile-menu-btn').setAttribute('aria-expanded', 'false');
+}
+$('mobile-menu-btn').onclick=()=>{
+  for(const selector of ['.app-header','.sidebar','.page-heading']) {
+    const node=document.querySelector(selector), marker=document.createComment('mobile-tools-slot');
+    node.replaceWith(marker); mobileSlots.push({node,marker}); $('mobile-tools-body').append(node);
+  }
+  $('mobile-menu-btn').setAttribute('aria-expanded','true');$('mobile-tools').showModal();
+};
+$('mobile-menu-close').onclick=closeMobileTools;
+$('mobile-tools').addEventListener('cancel',e=>{e.preventDefault();closeMobileTools();});
+$('mobile-tools').addEventListener('close',closeMobileTools);
+matchMedia('(max-width:700px)').addEventListener('change',e=>{if(!e.matches)closeMobileTools();});
+try { $('breathing-toggle').checked=localStorage.getItem('interviewBreathing')!=='off'; } catch {}
+function answerNode(text) {
+  const node=el('p','answer');node.dataset.original=text||'아직 답변이 없습니다.';
+  node.textContent=$('breathing-toggle').checked?breathingText(node.dataset.original):node.dataset.original;
+  return node;
+}
+$('breathing-toggle').onchange=()=>{
+  try { localStorage.setItem('interviewBreathing',$('breathing-toggle').checked?'on':'off'); } catch {}
+  document.querySelectorAll('.answer[data-original]').forEach(n=>n.textContent=$('breathing-toggle').checked?breathingText(n.dataset.original):n.dataset.original);
+};
 function field(parent, title, control) { const l = el('label', 'field', title); l.append(control); parent.append(l); return control; }
 function input(value = '', placeholder = '') { const i = el('input'); i.value = value; i.placeholder = placeholder; return i; }
 function footer(parent, ...buttons) { const f = el('div', 'dialog-footer'); f.append(...buttons); parent.append(f); return f; }
@@ -142,11 +174,13 @@ function settings() {
 function render() {
   safeSelection(); const company = current();
   $('companies').replaceChildren();
-  state.data.companies.forEach(c => {
-    const b=btn('',()=>{state.selected=c.id;selected.clear();$('search').value='';$('category-filter').value='all';localSave();stopLive();render();});
+  orderedCompanies().forEach(c => {
+    const b=btn('',()=>{state.selected=c.id;closeMobileTools();selected.clear();$('search').value='';$('category-filter').value='all';localSave();stopLive();render();});
     b.append(el('span','',c.name),el('small','',count(c)));b.classList.toggle('active',c.id===company?.id);if(c.id===company?.id)b.setAttribute('aria-current','page');$('companies').append(b);
   });
   $('company-title').textContent=company?.name||'새 기업을 추가해보세요';
+  $('mobile-menu-btn').textContent=(company?.name||'기업')+' · 메뉴';
+  document.querySelector('.reading-options').hidden=view==='manage';
   const qs=company?flat(company):[];
   const follows=qs.reduce((n,q)=>n+(q.followUps?.length||0),0);
   $('company-count').textContent=`기본 ${qs.length} · 꼬리 ${follows} · 중요 ${qs.filter(q=>q.favorite).length} · 준비 완료 ${qs.filter(q=>q.status==='ready').length}`;
@@ -175,7 +209,7 @@ function followUpPanel(q) {
   q.followUps.forEach((f,i)=>{
     const item=el('details','follow-item'),title=el('summary','',`${i+1}. ${f.question}`),content=el('div','follow-answer');
     if(f.keywords?.length){const chips=el('div','chips');f.keywords.forEach(k=>chips.append(el('span','chip',k)));content.append(chips);}
-    content.append(el('p','answer',f.answer||'아직 답변이 없습니다.'));
+    content.append(answerNode(f.answer));
     item.append(title,content);list.append(item);
   });
   panel.append(list);return panel;
@@ -203,7 +237,7 @@ function renderList() {
       }else{
         const card=el('details','study-card');const summary=el('summary');summary.append(el('span','question-title',q.question),starButton(q));const body=el('div','study-body');
         const chips=el('div','chips');q.keywords.forEach(k=>chips.append(el('span','chip',k)));body.append(chips);
-        if(!$('keyword-only').checked)body.append(el('p','answer',q.answer||'아직 답변이 없습니다.'));else if(!q.keywords.length)body.append(el('p','muted','키워드가 없어요. 수정에서 답변 속 문구를 선택해 추가할 수 있어요.'));
+        if(!$('keyword-only').checked)body.append(answerNode(q.answer));else if(!q.keywords.length)body.append(el('p','muted','키워드가 없어요. 수정에서 답변 속 문구를 선택해 추가할 수 있어요.'));
         const follows=followUpPanel(q);if(follows)body.append(follows);
         body.append(btn('질문·답변 수정',()=>editQuestion(q.id)));card.append(summary,body);root.append(card);
       }
@@ -301,7 +335,7 @@ function bulkPaste() {
 function transferDialog() {
   const body=openDialog('기업별 가져오기 / 내보내기');if(!body)return;
   body.append(el('h3','','내보내기'));const list=el('div','check-list'),picked=new Set(current()?[current().id]:[]);body.append(list);
-  state.data.companies.forEach(c=>{const check=input();check.type='checkbox';check.checked=picked.has(c.id);check.onchange=()=>check.checked?picked.add(c.id):picked.delete(c.id);const label=el('label','',`${c.name} · ${count(c)}개 질문`);label.prepend(check);list.append(label);});
+  orderedCompanies().forEach(c=>{const check=input();check.type='checkbox';check.checked=picked.has(c.id);check.onchange=()=>check.checked?picked.add(c.id):picked.delete(c.id);const label=el('label','',`${c.name} · ${count(c)}개 질문`);label.prepend(check);list.append(label);});
   body.append(btn('선택한 기업 내보내기',()=>{if(!picked.size)return message('내보낼 기업을 선택해주세요.');const companies=state.data.companies.filter(c=>picked.has(c.id));download(documentOf(companies),companies.length===1?companies[0].name+'-면접준비':'면접준비-선택기업');}));
   body.append(el('h3','','JSON 가져오기'));const file=el('input');file.type='file';file.accept='.json,application/json';file.setAttribute('aria-label','면접 JSON 파일 선택');body.append(file,el('p','muted','전체 파일을 교체하지 않습니다. 파일 안에서 가져올 기업과 처리 방법을 선택할 수 있어요.'));
   const err=errorBox(body);
@@ -352,7 +386,7 @@ function renderLive(){
   if(s.index>=s.questions.length){card.append(el('h2','','준비한 질문을 모두 연습했어요.'),btn('다시 설정하기',()=>{stopLive();renderLive();},'primary'));root.append(card);return;}
   const q=s.questions[s.index],meta=el('div','live-meta'),timer=el('span','',`${Math.floor((Date.now()-s.start)/1000)}초`);meta.append(el('span','',`${s.index+1} / ${s.questions.length}`),timer);card.append(meta,el('h2','live-question',q.question));
   if(!s.reveal)clock=setInterval(()=>timer.textContent=`${Math.floor((Date.now()-s.start)/1000)}초`,1000);
-  if(s.reveal){const chips=el('div','chips');q.keywords.forEach(k=>chips.append(el('span','chip',k)));card.append(chips,el('p','answer',q.answer||'아직 답변이 없습니다.'));const follows=followUpPanel(q);if(follows)card.append(follows);}
+  if(s.reveal){const chips=el('div','chips');q.keywords.forEach(k=>chips.append(el('span','chip',k)));card.append(chips,answerNode(q.answer));const follows=followUpPanel(q);if(follows)card.append(follows);}
   const actions=el('div','actions');actions.append(btn(s.reveal?'다음 질문':'답변 확인',()=>{if(s.reveal){s.index++;s.reveal=false;s.start=Date.now();}else s.reveal=true;renderLive();},'primary'),btn('종료',()=>{stopLive();renderLive();}));card.append(actions);root.append(card);
 }
 

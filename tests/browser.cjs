@@ -25,9 +25,10 @@ process.on('exit',()=>server.kill());
   });
   await context.route('http://localhost:8765/interview-data.json',route=>route.fulfill({json:seed}));
   const page=await context.newPage();page.on('pageerror',e=>{errors.push(e.message);console.error('PAGE ERROR',e.message)});page.on('dialog',d=>d.accept());
-  await page.goto('http://localhost:8765');await page.locator('#sync-status[data-state="saved"]').waitFor({timeout:7000}).catch(async e=>{console.log('STATUS',await page.locator('#sync-status').innerText());console.log('BODY',(await page.locator('body').innerText()).slice(0,500));throw e;});return {page,context};
+  await page.goto('http://localhost:8765');await page.locator('#sync-status[data-state="saved"]').waitFor({timeout:7000,state:'attached'}).catch(async e=>{console.log('STATUS',await page.locator('#sync-status').innerText());console.log('BODY',(await page.locator('body').innerText()).slice(0,500));throw e;});return {page,context};
  }
  const {page,context}=await setup({width:1440,height:1000});
+ await page.locator('#companies button').filter({hasText:'폴라리스오피스'}).click();
  assert.equal(await page.locator('.question-row').count(),91);
  await page.screenshot({path:'/tmp/interview-desktop.png',fullPage:false});
  // Empty Golfzon workspace, draft question creation and editing.
@@ -59,9 +60,9 @@ process.on('exit',()=>server.kill());
  await page.getByRole('button',{name:'닫기',exact:true}).last().click();
  // Connect and write to mock API; then read from a separate mobile browser.
  await page.locator('#settings-btn').click();await page.getByLabel('GitHub 연결 키',{exact:true}).fill('test-token-not-real');await page.getByLabel('내가 저장하는 질문·답변이 이 공개 GitHub 저장소에 공개되는 것을 이해하고 동의합니다.').check();await page.getByRole('button',{name:'연결하고 동기화'}).click();
- await page.locator('#sync-status[data-state="saved"]').waitFor();assert.equal(puts,1);
+ await page.locator('#sync-status[data-state="saved"]').waitFor({state:'attached'});assert.equal(puts,1);
  assert.ok(!(await page.evaluate(()=>localStorage.getItem('interviewWorkspace.v2'))).includes('test-token-not-real'));
- const mobile=await setup({width:390,height:844});await mobile.page.locator('#companies button').filter({hasText:'골프존'}).click();
+ const mobile=await setup({width:390,height:844});await mobile.page.locator('#mobile-menu-btn').click();await mobile.page.locator('#companies button').filter({hasText:'골프존'}).click();
  assert.equal(await mobile.page.locator('.question-row').count(),2);
  assert.ok(await mobile.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await mobile.page.screenshot({path:'/tmp/interview-mobile.png',fullPage:false});
@@ -76,7 +77,7 @@ process.on('exit',()=>server.kill());
  assert.ok((await mobile.page.locator('#live .answer').innerText()).includes('정보 위계'));
  await mobile.page.getByRole('button',{name:'종료',exact:true}).click();
  await mobile.page.locator('[data-view="manage"]').click();
- await mobile.page.locator('#transfer-btn').click();
+ await mobile.page.locator('#mobile-menu-btn').click();await mobile.page.locator('#transfer-btn').click();
  await mobile.page.getByLabel('면접 JSON 파일 선택').setInputFiles({name:'import.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({companies:[{id:'imported',name:'가져오기 테스트',categories:[]}]}))});
  await mobile.page.getByRole('button',{name:'선택한 기업 가져오기',exact:true}).click();
  assert.equal(await mobile.page.locator('#companies button').count(),4);
