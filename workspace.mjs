@@ -78,16 +78,28 @@ $('mobile-menu-close').onclick=closeMobileTools;
 $('mobile-tools').addEventListener('cancel',e=>{e.preventDefault();closeMobileTools();});
 $('mobile-tools').addEventListener('close',closeMobileTools);
 matchMedia('(max-width:700px)').addEventListener('change',e=>{if(!e.matches)closeMobileTools();});
-try { $('breathing-toggle').checked=localStorage.getItem('interviewBreathing')!=='off'; } catch {}
-function answerNode(text) {
-  const node=el('p','answer');node.dataset.original=text||'아직 답변이 없습니다.';
-  node.textContent=$('breathing-toggle').checked?breathingText(node.dataset.original):node.dataset.original;
-  return node;
+function answerContent(record, parentId=record.id) {
+  const fragment=document.createDocumentFragment(),node=el('p','answer');
+  node.dataset.original=record.answer||'아직 답변이 없습니다.';
+  const control=breathingOption(record.autoBreathing!==false);
+  const check=control.querySelector('input');
+  const refresh=()=>{node.textContent=check.checked?breathingText(node.dataset.original):node.dataset.original;};
+  refresh();check.onchange=()=>{
+    if(staleTab||storageBroken){check.checked=record.autoBreathing!==false;message('저장 상태를 확인하고 새로고침 후 변경해주세요.');return;}
+    const parent=locate(parentId)?.q;
+    const saved=record.id===parentId?parent:parent?.followUps?.find(f=>f.id===record.id);
+    if(!saved){check.checked=record.autoBreathing!==false;return;}
+    saved.autoBreathing=check.checked;record.autoBreathing=check.checked;
+    refresh();changed();
+  };
+  fragment.append(control,node);return fragment;
 }
-$('breathing-toggle').onchange=()=>{
-  try { localStorage.setItem('interviewBreathing',$('breathing-toggle').checked?'on':'off'); } catch {}
-  document.querySelectorAll('.answer[data-original]').forEach(n=>n.textContent=$('breathing-toggle').checked?breathingText(n.dataset.original):n.dataset.original);
-};
+function breathingOption(enabled=true) {
+  const label=el('label','answer-reading','호흡 줄바꿈');
+  const check=input();check.type='checkbox';check.checked=enabled;
+  label.prepend(check);label.title='끄면 직접 입력한 줄바꿈 그대로 표시합니다.';
+  return label;
+}
 function field(parent, title, control) { const l = el('label', 'field', title); l.append(control); parent.append(l); return control; }
 function input(value = '', placeholder = '') { const i = el('input'); i.value = value; i.placeholder = placeholder; return i; }
 function footer(parent, ...buttons) { const f = el('div', 'dialog-footer'); f.append(...buttons); parent.append(f); return f; }
@@ -118,7 +130,7 @@ function conflictName(path, local, remote) {
     const category = all.flatMap(c => c.categories).find(c => c.id === p); if (category) return category.name;
     const question = all.flatMap(c => c.categories.flatMap(k => k.questions)).find(q => q.id === p); if (question) return question.question;
     const follow = all.flatMap(c => c.categories.flatMap(k => k.questions.flatMap(q => q.followUps || []))).find(f => f.id === p); if (follow) return follow.question;
-    return { companies: '', categories: '', questions: '', followUps: '꼬리질문', answer: '답변', question: '질문', keywords: '키워드', favorite: '중요 표시', status: '준비 상태', name: '이름' }[p] ?? p;
+    return { companies: '', categories: '', questions: '', followUps: '꼬리질문', autoBreathing: '호흡 줄바꿈', answer: '답변', question: '질문', keywords: '키워드', favorite: '중요 표시', status: '준비 상태', name: '이름' }[p] ?? p;
   }).filter(Boolean).join(' › ');
 }
 function resolveConflicts(base, local, remote, conflicts) {
@@ -180,7 +192,6 @@ function render() {
   });
   $('company-title').textContent=company?.name||'새 기업을 추가해보세요';
   $('mobile-menu-btn').textContent=(company?.name||'기업')+' · 메뉴';
-  document.querySelector('.reading-options').hidden=view==='manage';
   const qs=company?flat(company):[];
   const follows=qs.reduce((n,q)=>n+(q.followUps?.length||0),0);
   $('company-count').textContent=`기본 ${qs.length} · 꼬리 ${follows} · 중요 ${qs.filter(q=>q.favorite).length} · 준비 완료 ${qs.filter(q=>q.status==='ready').length}`;
@@ -209,7 +220,7 @@ function followUpPanel(q) {
   q.followUps.forEach((f,i)=>{
     const item=el('details','follow-item'),title=el('summary','',`${i+1}. ${f.question}`),content=el('div','follow-answer');
     if(f.keywords?.length){const chips=el('div','chips');f.keywords.forEach(k=>chips.append(el('span','chip',k)));content.append(chips);}
-    content.append(answerNode(f.answer));
+    content.append(answerContent(f,q.id));
     item.append(title,content);list.append(item);
   });
   panel.append(list);return panel;
@@ -237,7 +248,7 @@ function renderList() {
       }else{
         const card=el('details','study-card');const summary=el('summary');summary.append(el('span','question-title',q.question),starButton(q));const body=el('div','study-body');
         const chips=el('div','chips');q.keywords.forEach(k=>chips.append(el('span','chip',k)));body.append(chips);
-        if(!$('keyword-only').checked)body.append(answerNode(q.answer));else if(!q.keywords.length)body.append(el('p','muted','키워드가 없어요. 수정에서 답변 속 문구를 선택해 추가할 수 있어요.'));
+        if(!$('keyword-only').checked)body.append(answerContent(q));else if(!q.keywords.length)body.append(el('p','muted','키워드가 없어요. 수정에서 답변 속 문구를 선택해 추가할 수 있어요.'));
         const follows=followUpPanel(q);if(follows)body.append(follows);
         body.append(btn('질문·답변 수정',()=>editQuestion(q.id)));card.append(summary,body);root.append(card);
       }
@@ -252,6 +263,7 @@ function editQuestion(id=null) {
   const category=field(row,'카테고리',input(existing?.cat.name||company.categories[0]?.name||'기본 질문'));category.setAttribute('list','editor-categories');const dl=el('datalist');dl.id='editor-categories';company.categories.forEach(c=>dl.append(option(c.name,c.name)));body.append(dl);
   const status=el('select');Object.entries(statuses).forEach(([k,v])=>status.append(option(k,v)));status.value=existing?.q.status||'draft';field(row,'준비 상태',status);
   const answer=el('textarea');answer.value=existing?.q.answer||'';answer.rows=11;field(body,'답변',answer);
+  const breathing=breathingOption(existing?.q.autoBreathing!==false);body.append(breathing,el('p','reading-help','끄면 직접 입력한 줄바꿈 그대로 표시합니다.'));const autoBreathing=breathing.querySelector('input');
   const keywordInput=el('textarea','keywords-editor');keywordInput.value=(existing?.q.keywords||[]).join(' → ');keywordInput.rows=2;field(body,'기억할 키워드 / 말할 순서',keywordInput);
   body.append(el('p','muted','화살표(→), 쉼표 또는 줄바꿈으로 구분하세요. 추천은 답변에 실제 있는 문구만 찾으며 AI 요약은 아닙니다. 기존 키워드는 직접 바꾸기 전까지 유지됩니다.'));
   let selection='';answer.addEventListener('select',()=>selection=answer.value.slice(answer.selectionStart,answer.selectionEnd).trim());
@@ -268,6 +280,7 @@ function editQuestion(id=null) {
       const remove=btn('삭제',()=>{followDraft.splice(i,1);editorDirty=true;drawFollowEditor();},'small danger');remove.setAttribute('aria-label',`꼬리질문 ${i+1} 삭제`);head.append(remove);row.append(head);
       const title=field(row,`꼬리질문 ${i+1} 질문`,input(f.question));title.oninput=()=>f.question=title.value;
       const text=el('textarea','follow-textarea');text.rows=4;text.value=f.answer;field(row,`꼬리질문 ${i+1} 답변`,text);text.oninput=()=>f.answer=text.value;
+      const breathing=breathingOption(f.autoBreathing!==false);breathing.querySelector('input').onchange=e=>{f.autoBreathing=e.target.checked;editorDirty=true;};row.append(breathing);
       const keys=field(row,`꼬리질문 ${i+1} 키워드 (선택)`,input((f.keywords||[]).join(' → ')));keys.oninput=()=>f.keywords=keys.value.split(/→|,|\n/).map(x=>x.trim()).filter(Boolean);
       followList.append(row);if(focusId===f.id)queueMicrotask(()=>title.focus());
     });
@@ -281,7 +294,7 @@ function editQuestion(id=null) {
     if(!question.value.trim()||!category.value.trim()){err.textContent='질문과 카테고리를 입력해주세요.';return;}
     if(followDraft.some(f=>!f.question.trim())){err.textContent='비어 있는 꼬리질문의 질문을 입력하거나 삭제해주세요.';followEditor.open=true;return;}
     let target=company.categories.find(c=>c.name===category.value.trim());if(!target){target={id:uid('cat'),name:category.value.trim(),questions:[]};company.categories.push(target);}
-    const q={...(existing?clone(existing.q):{id:uid('q'),subcategory:null}),question:question.value.trim(),answer:answer.value.trim(),keywords:[...new Set(keywordInput.value.split(/→|,|\n/).map(x=>x.trim()).filter(Boolean))],favorite:favorite.checked,status:status.value};
+    const q={...(existing?clone(existing.q):{id:uid('q'),subcategory:null}),question:question.value.trim(),answer:answer.value.trim(),keywords:[...new Set(keywordInput.value.split(/→|,|\n/).map(x=>x.trim()).filter(Boolean))],favorite:favorite.checked,status:status.value,autoBreathing:autoBreathing.checked};
     if(followDraft.length||existing?.q.followUps)q.followUps=followDraft.map(f=>({...f,question:f.question.trim(),answer:f.answer.trim(),keywords:[...new Set(f.keywords||[])]}));
     if(existing&&existing.cat.id===target.id)existing.cat.questions[existing.cat.questions.findIndex(x=>x.id===id)]=q;
     else{if(existing)existing.cat.questions=existing.cat.questions.filter(x=>x.id!==id);target.questions.push(q);}
@@ -388,7 +401,7 @@ function renderLive(){
   if(s.index>=s.questions.length){card.append(el('h2','','준비한 질문을 모두 연습했어요.'),btn('다시 설정하기',()=>{stopLive();renderLive();},'primary'));root.append(card);return;}
   const q=s.questions[s.index],meta=el('div','live-meta'),timer=el('span','',`${Math.floor((Date.now()-s.start)/1000)}초`);meta.append(el('span','',`${s.index+1} / ${s.questions.length}`),timer);const toolbar=el('div','live-toolbar');toolbar.append(btn('연습 종료',()=>{stopLive();renderLive();},'live-exit'),meta);root.append(toolbar);card.append(el('p','live-speaker','면접관'),el('h2','live-question',q.question));
   if(!s.reveal)clock=setInterval(()=>timer.textContent=`${Math.floor((Date.now()-s.start)/1000)}초`,1000);
-  if(s.reveal){const response=el('div','live-response');response.tabIndex=0;response.setAttribute('role','region');response.setAttribute('aria-label','모범 답변과 꼬리질문');const chips=el('div','chips');q.keywords.forEach(k=>chips.append(el('span','chip',k)));response.append(chips,answerNode(q.answer));const follows=followUpPanel(q);if(follows)response.append(follows);card.append(response);}
+  if(s.reveal){const response=el('div','live-response');response.tabIndex=0;response.setAttribute('role','region');response.setAttribute('aria-label','모범 답변과 꼬리질문');const chips=el('div','chips');q.keywords.forEach(k=>chips.append(el('span','chip',k)));response.append(chips,answerContent(q));const follows=followUpPanel(q);if(follows)response.append(follows);card.append(response);}
   const actions=el('div','actions');actions.append(btn(s.reveal?'다음 질문':'답변 확인',()=>{if(s.reveal){s.index++;s.reveal=false;s.start=Date.now();}else s.reveal=true;renderLive();},'primary'),btn('종료',()=>{stopLive();renderLive();}));card.append(actions);root.append(card);
 }
 
