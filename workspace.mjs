@@ -1,6 +1,7 @@
 import { breathingText, newestCompanies } from './reading.mjs?v=4';
 import { clone, uid, equal, count, flat, validate, documentOf, newCompany, mergeDocuments, move, suggestKeywords, parseBulk } from './core.mjs?v=3';
 import { GitHubSync, SEED_PATH } from './github-sync.mjs?v=3';
+import { CONNECTION_KEY, readConnection, saveConnection } from './connection.mjs?v=1';
 
 const $ = id => document.getElementById(id);
 const STORAGE = 'interviewWorkspace.v2', LEGACY = 'interviewCompanyData.v1';
@@ -112,6 +113,10 @@ const sync = new GitHubSync({
   resolve: resolveConflicts,
   status: (type, text) => { $('sync-status').dataset.state = type; $('sync-status').textContent = text; },
 });
+function connectionUI() {
+  $('sync-btn').textContent = sync.token ? '지금 동기화' : 'GitHub 저장';
+  $('settings-btn').textContent = sync.token ? '자동 저장 설정' : '연결 설정';
+}
 async function runSync(write = false) {
   if (staleTab) return message('다른 탭에서 변경했어요. 새로고침 후 동기화해주세요.');
   if (storageBroken) return message('브라우저 저장소를 확인하고 먼저 JSON을 내보내주세요.');
@@ -168,18 +173,30 @@ function resolveConflicts(base, local, remote, conflicts) {
 }
 function settings() {
   const body = openDialog('GitHub 저장 연결'); if (!body) return;
-  body.append(el('p', 'note', '연결 후 수정사항은 GitHub에 자동 저장됩니다. 읽기만 하는 기기는 연결하지 않아도 최신 노트를 불러올 수 있어요. 연결 키는 현재 페이지 메모리에서만 사용하며, 새로고침하거나 닫으면 다시 입력해야 합니다.'));
+  body.append(el('p', 'note', '연결 후 수정사항은 약 2초 뒤 GitHub에 자동 저장됩니다. PC와 휴대폰에서 각각 한 번 연결하고 「이 기기에서 연결 유지」를 선택하면, 다음 방문에도 자동으로 연결됩니다. 읽기만 하는 기기는 연결하지 않아도 됩니다.'));
   const instructions = el('ol','muted');
   for (const t of ['GitHub에서 Fine-grained personal access token을 만드세요.', 'Repository access: Only select repositories → interview를 선택하세요.', 'Repository permissions: Contents를 Read and write로 설정하세요. 다른 권한은 필요하지 않습니다.', '발급받은 키를 아래에 입력하세요. 채팅이나 저장소 파일에 붙여넣지 마세요.']) instructions.append(el('li','',t));
   const link = el('a','', 'GitHub에서 연결 키 만들기 ↗'); link.href = 'https://github.com/settings/personal-access-tokens/new'; link.target = '_blank'; link.rel = 'noopener noreferrer';
   body.append(instructions,link,el('p','note warning','현재 interview 저장소는 공개 상태입니다. GitHub에 저장한 질문·답변은 공개되며, 입장 비밀번호로 데이터 파일을 보호할 수는 없습니다.'));
-  const token = field(body,'GitHub 연결 키',input('','github_pat_…')); token.type = 'password'; token.autocomplete = 'off'; token.spellcheck = false;
+  const token = field(body,'GitHub 연결 키',input('',sync.token ? '이미 연결됨 · 키를 바꿀 때만 입력' : 'github_pat_…')); token.type = 'password'; token.autocomplete = 'off'; token.spellcheck = false;
+  const remember=input();remember.type='checkbox';
+  try { remember.checked=!!readConnection(localStorage); } catch {}
+  const rememberLabel=el('label','note','이 기기에서 연결 유지');rememberLabel.prepend(remember);body.append(rememberLabel);
+  body.append(el('p','note','개인 기기에서만 선택하세요. 연결 키는 이 브라우저에 저장되며 질문·답변 파일이나 내보내기에는 포함되지 않습니다. 키가 만료되거나 브라우저 데이터를 삭제하면 다시 연결해야 합니다.'));
   const consent=input();consent.type='checkbox';const consentLabel=el('label','note','내가 저장하는 질문·답변이 이 공개 GitHub 저장소에 공개되는 것을 이해하고 동의합니다.');consentLabel.prepend(consent);body.append(consentLabel);
+  consent.checked=!!sync.token;
   const err = errorBox(body);
-  footer(body,btn('연결 해제',()=>{sync.disconnect(); clearTimeout(saveTimer); closeDialog(); message('쓰기 연결을 해제했어요. 저장된 노트는 유지됩니다.');}),btn('취소',()=>closeDialog()),btn('연결하고 동기화',async()=>{
+  footer(body,btn('연결 해제',()=>{
+    sync.disconnect(); clearTimeout(saveTimer); connectionUI();
+    try { saveConnection(localStorage,'',false); } catch { err.textContent='연결은 중단했지만 저장된 키를 지우지 못했어요. 브라우저의 사이트 데이터를 확인해주세요.';return; }
+    closeDialog(); $('sync-status').textContent='자동 저장 연결 해제 · 이 기기 저장';$('sync-status').dataset.state='pending';
+    message('이 브라우저의 연결 키를 삭제했어요. 저장된 노트는 유지됩니다.');
+  }),btn('취소',()=>closeDialog()),btn('연결하고 동기화',async()=>{
     if(!consent.checked){err.textContent='공개 저장 범위에 동의한 경우에만 연결할 수 있어요.';return;}
-    if (!token.value.trim()) { err.textContent='연결 키를 입력해주세요.'; return; }
-    sync.connect(token.value); token.value=''; closeDialog(true); await runSync(true);
+    const value=token.value.trim()||sync.token;
+    if (!value) { err.textContent='연결 키를 입력해주세요.'; return; }
+    try { saveConnection(localStorage,value,remember.checked); } catch { err.textContent='연결 설정을 이 브라우저에 저장하지 못했어요. 사이트의 저장 권한을 확인해주세요.';return; }
+    sync.connect(value); token.value=''; connectionUI(); closeDialog(true); await runSync(true);
   },'primary'));
 }
 
@@ -417,21 +434,29 @@ const keywordsBtn=btn('빈 키워드 채우기',batchKeywords);$('bulk-btn').aft
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{view=b.dataset.view;selected.clear();stopLive();render();});
 window.addEventListener('beforeunload',e=>{if(editorDirty||!equal(state.data,state.base)&&state.data.companies.length&&sync.token){e.preventDefault();e.returnValue='';}});
 window.addEventListener('storage',e=>{
+  if(e.key===CONNECTION_KEY){
+    if(!e.newValue){sync.disconnect();clearTimeout(saveTimer);connectionUI();$('sync-status').textContent='다른 탭에서 자동 저장 연결을 해제했어요.';}
+    return;
+  }
   if(e.key!==STORAGE||!e.newValue)return;
   try{const incoming=JSON.parse(e.newValue);if(equal(incoming.data,state.data)&&equal(incoming.base,state.base))return;}catch{}
   staleTab=true;clearTimeout(saveTimer);sync.disconnect();$('sync-status').dataset.state='error';$('sync-status').textContent='다른 탭에서 변경됨 · 이 탭을 새로고침해주세요';
   document.querySelectorAll('#app button,#app input,#app select').forEach(n=>n.disabled=true);
   $('refresh-btn').disabled=false;$('refresh-btn').onclick=()=>location.reload();
 });
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!$('app').hidden&&!$('dialog').open&&!editorDirty&&view!=='live')runSync(false);});
+function resumeSync(){if(!document.hidden&&!$('app').hidden&&!$('dialog').open&&!editorDirty&&view!=='live')runSync(!!sync.token);}
+document.addEventListener('visibilitychange',resumeSync);
+window.addEventListener('online',resumeSync);
 let started=false;
 async function start(){
   $('gate').hidden=true;$('app').hidden=false;render();if(started)return;started=true;
   if(storageBroken){$('sync-status').textContent='기존 저장소를 읽지 못했어요. 원본을 보존하기 위해 동기화를 중단했습니다.';$('sync-status').dataset.state='error';message('이전 버전 데이터는 유지됩니다. JSON 백업을 확인해주세요.');return;}
+  try { const token=readConnection(localStorage);if(token)sync.connect(token); } catch { message('저장된 연결 설정을 읽지 못했어요. 연결 설정에서 다시 연결해주세요.'); }
+  connectionUI();
   if(!state.data.companies.length&&!state.base){
     try{let response=await fetch('./interview-data.json',{cache:'no-store'});if(response.status===404)response=await fetch('./'+SEED_PATH,{cache:'no-store'});if(!response.ok)throw new Error();const data=documentOf(validate(await response.json()).companies);state.base=clone(data);state.data=clone(data);safeSelection();localSave();render();}catch{message('기본 데이터를 불러오지 못했어요. 새로고침하거나 JSON을 가져와주세요.');}
   }
-  await runSync(false);
+  await runSync(!!sync.token);
   if(!staleTab&&!state.data.companies.some(c=>c.id==='golfzon'||c.name==='골프존')){state.data.companies.push({id:'golfzon',name:'골프존',createdAt:0,categories:[]});changed();render();}
 }
 $('gate-form').onsubmit=e=>{e.preventDefault();if($('gate-input').value.trim()==='1303'){sessionStorage.setItem('interviewGateUnlocked','1');$('gate-input').value='';start();}else{$('gate-error').textContent='비밀번호를 확인해주세요.';}};
