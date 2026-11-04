@@ -86,6 +86,10 @@ body.live-running{overflow:hidden}
 .project-group-heading{margin:34px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line)}
 .project-group-heading:first-of-type{margin-top:6px}
 .project-group-heading h2{font-size:18px;margin:0;color:var(--primary)}
-.project-card{background:white;border:1px solid var(--line);border-radius:12px;padding:20px 22px;margin-bottom:14px}
-.project-question{font-size:15px;font-weight:700;margin:0 0 4px}
+.project-card{background:white;border:1px solid var(--line);border-radius:12px;margin-bottom:14px;overflow:hidden}
+.project-card>summary{cursor:pointer;padding:18px 22px;display:flex;gap:12px;align-items:center;list-style:none}
+.project-card>summary::before{content:'▸';color:var(--muted);flex:none}
+.project-card[open]>summary::before{content:'▾'}
+.project-answer-body{padding:0 22px 20px}
+.project-question{font-size:15px;font-weight:700;margin:0;flex:1}
 .project-answer-body .answer{margin:12px 0 16px}

@@ -807,8 +807,8 @@
           ]
         },
         {
-          "id": "cat_4qya74stjejqa",
-          "name": "프로젝트",
+          "id": "cat_21cb21a7-1aa2-4a2b-b88b-dc203bd1acfd",
+          "name": "프로젝트 · 우리WON뱅킹",
           "questions": [
             {
               "id": "q_37u81aivz4zco",
@@ -917,7 +917,13 @@
               "subcategory": "우리WON뱅킹 (유니버설뱅킹)",
               "favorite": false,
               "keywords": []
-            },
+            }
+          ]
+        },
+        {
+          "id": "cat_4830372c-12f1-4183-80ba-57e81e509fdc",
+          "name": "프로젝트 · HD현대중공업",
+          "questions": [
             {
               "id": "q_5zj252mb7nj2t",
               "question": "개요 · 역할 · 범위",
@@ -995,7 +1001,13 @@
               "subcategory": "HD현대중공업 홈페이지 (2025.02~2025.07)",
               "favorite": false,
               "keywords": []
-            },
+            }
+          ]
+        },
+        {
+          "id": "cat_320452a1-ae15-4e58-afbb-a8255cb2ae93",
+          "name": "프로젝트 · KB 모바일 브랜치",
+          "questions": [
             {
               "id": "q_3mgbuuo2e96km",
               "question": "개요 · 역할 · 범위",
@@ -1042,7 +1054,13 @@
               "subcategory": "KB모바일브랜치 (간편금융, 2021.12~2022.06)",
               "favorite": false,
               "keywords": []
-            },
+            }
+          ]
+        },
+        {
+          "id": "cat_5377ee36-ec17-4ffa-892e-9e3769ae6f98",
+          "name": "프로젝트 · KB 태블릿 브랜치",
+          "questions": [
             {
               "id": "q_oeq6hler490sh",
               "question": "개요 · 역할 · 범위",
@@ -1074,7 +1092,13 @@
               "subcategory": "KB태블릿브랜치 (상담 플랫폼, 포트폴리오 28~36쪽)",
               "favorite": false,
               "keywords": []
-            },
+            }
+          ]
+        },
+        {
+          "id": "cat_40652243-9bc9-4b7c-8a1e-811d391e669b",
+          "name": "프로젝트 · 공통 패턴 · 보조 사례",
+          "questions": [
             {
               "id": "q_lq1ezuyv3awne",
               "question": "디자인시스템 예외 — 은행소개 메인 본문 (사전에 원칙을 세운 유형)",
@@ -2787,8 +2811,8 @@
           ]
         },
         {
-          "id": "cat_j06m8t82om0gb",
-          "name": "프로젝트",
+          "id": "cat_745edcd9-3399-473a-b246-fe878ce09d47",
+          "name": "프로젝트 · 우리WON뱅킹",
           "questions": [
             {
               "id": "q_i6ug39p2loxfp",
@@ -2897,7 +2921,13 @@
               "subcategory": "우리WON뱅킹 (유니버설뱅킹)",
               "favorite": false,
               "keywords": []
-            },
+            }
+          ]
+        },
+        {
+          "id": "cat_799ea0b2-466e-40ee-adfe-33d6cc0a8dc9",
+          "name": "프로젝트 · HD현대중공업",
+          "questions": [
             {
               "id": "q_7iie0q3c21zul",
               "question": "개요 · 역할 · 범위",
@@ -2975,7 +3005,13 @@
               "subcategory": "HD현대중공업 홈페이지 (2025.02~2025.07)",
               "favorite": false,
               "keywords": []
-            },
+            }
+          ]
+        },
+        {
+          "id": "cat_b487167e-b030-4996-bed0-ed754a34e3d4",
+          "name": "프로젝트 · KB 모바일 브랜치",
+          "questions": [
             {
               "id": "q_qra8t2qmgzjj9",
               "question": "개요 · 역할 · 범위",
@@ -3022,7 +3058,13 @@
               "subcategory": "KB모바일브랜치 (간편금융, 2021.12~2022.06)",
               "favorite": false,
               "keywords": []
-            },
+            }
+          ]
+        },
+        {
+          "id": "cat_6283c6ed-8f06-4d07-bbfa-57aa7ccdc512",
+          "name": "프로젝트 · KB 태블릿 브랜치",
+          "questions": [
             {
               "id": "q_l0flx9bkllnc7",
               "question": "개요 · 역할 · 범위",
@@ -3054,7 +3096,13 @@
               "subcategory": "KB태블릿브랜치 (상담 플랫폼, 포트폴리오 28~36쪽)",
               "favorite": false,
               "keywords": []
-            },
+            }
+          ]
+        },
+        {
+          "id": "cat_0059aff0-4f78-49ff-a6fa-2204b92dd5bb",
+          "name": "프로젝트 · 공통 패턴 · 보조 사례",
+          "questions": [
             {
               "id": "q_i1rg992ebm3z6",
               "question": "디자인시스템 예외 — 은행소개 메인 본문 (사전에 원칙을 세운 유형)",
@@ -3744,8 +3792,8 @@
           ]
         },
         {
-          "id": "cat_qiy9dcbw2ue17",
-          "name": "프로젝트",
+          "id": "cat_0de7bca4-5ac5-4af9-9f80-41a03ac9c403",
+          "name": "프로젝트 · 우리WON뱅킹",
           "questions": [
             {
               "id": "q_d029pmbou2nem",
@@ -3854,7 +3902,13 @@
               "subcategory": "우리WON뱅킹 (유니버설뱅킹)",
               "favorite": false,
               "keywords": []
-            },
+            }
+          ]
+        },
+        {
+          "id": "cat_0d6afc99-69a7-4dc4-9ec5-5798ee3fecdb",
+          "name": "프로젝트 · HD현대중공업",
+          "questions": [
             {
               "id": "q_lekje971xx8ej",
               "question": "개요 · 역할 · 범위",
@@ -3932,7 +3986,13 @@
               "subcategory": "HD현대중공업 홈페이지 (2025.02~2025.07)",
               "favorite": false,
               "keywords": []
-            },
+            }
+          ]
+        },
+        {
+          "id": "cat_45b48b16-71de-46b8-ab26-14bf768588cb",
+          "name": "프로젝트 · KB 모바일 브랜치",
+          "questions": [
             {
               "id": "q_v5em5ivgfuz3k",
               "question": "개요 · 역할 · 범위",
@@ -3979,7 +4039,13 @@
               "subcategory": "KB모바일브랜치 (간편금융, 2021.12~2022.06)",
               "favorite": false,
               "keywords": []
-            },
+            }
+          ]
+        },
+        {
+          "id": "cat_a04ee2c7-ca55-477b-b006-2220bd9ad710",
+          "name": "프로젝트 · KB 태블릿 브랜치",
+          "questions": [
             {
               "id": "q_sohto05f299xs",
               "question": "개요 · 역할 · 범위",
@@ -4011,7 +4077,13 @@
               "subcategory": "KB태블릿브랜치 (상담 플랫폼, 포트폴리오 28~36쪽)",
               "favorite": false,
               "keywords": []
-            },
+            }
+          ]
+        },
+        {
+          "id": "cat_9a709059-b0a9-4486-be31-74bc71314b87",
+          "name": "프로젝트 · 공통 패턴 · 보조 사례",
+          "questions": [
             {
               "id": "q_xn96mbmwolblq",
               "question": "디자인시스템 예외 — 은행소개 메인 본문 (사전에 원칙을 세운 유형)",
@@ -4813,8 +4885,8 @@
           ]
         },
         {
-          "id": "cat_gx07rjhkrqlp9",
-          "name": "프로젝트",
+          "id": "cat_d3e0bc9c-a727-4015-b3a8-4819d99be8d9",
+          "name": "프로젝트 · 우리WON뱅킹",
           "questions": [
             {
               "id": "q_ate93nooyvugp",
@@ -4923,7 +4995,13 @@
               "subcategory": "우리WON뱅킹 (유니버설뱅킹)",
               "favorite": false,
               "keywords": []
-            },
+            }
+          ]
+        },
+        {
+          "id": "cat_9b0d5107-7eb8-4a20-97e4-7a317e4c2dbc",
+          "name": "프로젝트 · HD현대중공업",
+          "questions": [
             {
               "id": "q_w8zru022b02cd",
               "question": "개요 · 역할 · 범위",
@@ -5001,7 +5079,13 @@
               "subcategory": "HD현대중공업 홈페이지 (2025.02~2025.07)",
               "favorite": false,
               "keywords": []
-            },
+            }
+          ]
+        },
+        {
+          "id": "cat_20a57108-3ec6-4d4b-ba78-88a2b641f156",
+          "name": "프로젝트 · KB 모바일 브랜치",
+          "questions": [
             {
               "id": "q_ffl5p61csic1e",
               "question": "개요 · 역할 · 범위",
@@ -5048,7 +5132,13 @@
               "subcategory": "KB모바일브랜치 (간편금융, 2021.12~2022.06)",
               "favorite": false,
               "keywords": []
-            },
+            }
+          ]
+        },
+        {
+          "id": "cat_b12cd12b-29b6-405a-b708-684cd6df7942",
+          "name": "프로젝트 · KB 태블릿 브랜치",
+          "questions": [
             {
               "id": "q_qcds4x6jvqfg1",
               "question": "개요 · 역할 · 범위",
@@ -5080,7 +5170,13 @@
               "subcategory": "KB태블릿브랜치 (상담 플랫폼, 포트폴리오 28~36쪽)",
               "favorite": false,
               "keywords": []
-            },
+            }
+          ]
+        },
+        {
+          "id": "cat_70bfe909-89c4-49e7-86f6-1791b013402d",
+          "name": "프로젝트 · 공통 패턴 · 보조 사례",
+          "questions": [
             {
               "id": "q_3bonvya2ib8sm",
               "question": "디자인시스템 예외 — 은행소개 메인 본문 (사전에 원칙을 세운 유형)",
@@ -5630,8 +5726,8 @@
           ]
         },
         {
-          "id": "cat_6f0gvhq6xr19o",
-          "name": "프로젝트",
+          "id": "cat_d5eae0e1-0426-43f7-8d81-dfaf06d9d10c",
+          "name": "프로젝트 · 우리WON뱅킹",
           "questions": [
             {
               "id": "q_tj40ywlea610r",
@@ -5740,7 +5836,13 @@
               "subcategory": "우리WON뱅킹 (유니버설뱅킹)",
               "favorite": false,
               "keywords": []
-            },
+            }
+          ]
+        },
+        {
+          "id": "cat_6405541d-1e11-4526-9b0d-aaea1c7ff1da",
+          "name": "프로젝트 · HD현대중공업",
+          "questions": [
             {
               "id": "q_x9yqltxwaqpvz",
               "question": "개요 · 역할 · 범위",
@@ -5818,7 +5920,13 @@
               "subcategory": "HD현대중공업 홈페이지 (2025.02~2025.07)",
               "favorite": false,
               "keywords": []
-            },
+            }
+          ]
+        },
+        {
+          "id": "cat_6a3e6eec-422f-4ec0-8128-0a1324ab1453",
+          "name": "프로젝트 · KB 모바일 브랜치",
+          "questions": [
             {
               "id": "q_8gvkw3fyri4as",
               "question": "개요 · 역할 · 범위",
@@ -5865,7 +5973,13 @@
               "subcategory": "KB모바일브랜치 (간편금융, 2021.12~2022.06)",
               "favorite": false,
               "keywords": []
-            },
+            }
+          ]
+        },
+        {
+          "id": "cat_1406ded7-9cd5-48c3-bbfa-605f8d48f6f7",
+          "name": "프로젝트 · KB 태블릿 브랜치",
+          "questions": [
             {
               "id": "q_a7699s16f0dd3",
               "question": "개요 · 역할 · 범위",
@@ -5897,7 +6011,13 @@
               "subcategory": "KB태블릿브랜치 (상담 플랫폼, 포트폴리오 28~36쪽)",
               "favorite": false,
               "keywords": []
-            },
+            }
+          ]
+        },
+        {
+          "id": "cat_c96b5924-6d38-4cf2-bbfd-e1dfbe702409",
+          "name": "프로젝트 · 공통 패턴 · 보조 사례",
+          "questions": [
             {
               "id": "q_9v3cg8p5p5i9j",
               "question": "디자인시스템 예외 — 은행소개 메인 본문 (사전에 원칙을 세운 유형)",
