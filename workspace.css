@@ -81,3 +81,11 @@ body.live-running{overflow:hidden}
 .reading-help{font-size:12px;color:var(--muted);text-align:right;margin:0 0 12px}
 .follow-answer .answer-reading{margin:4px 0}
 .live-response .answer-reading{margin:6px 0}
+/* Read-only 프로젝트 탭: per-project retrospective sections built from the shared 프로젝트 카테고리. */
+#project-summary{max-width:760px}
+.project-group-heading{margin:34px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.project-group-heading:first-of-type{margin-top:6px}
+.project-group-heading h2{font-size:18px;margin:0;color:var(--primary)}
+.project-card{background:white;border:1px solid var(--line);border-radius:12px;padding:20px 22px;margin-bottom:14px}
+.project-question{font-size:15px;font-weight:700;margin:0 0 4px}
+.project-answer-body .answer{margin:12px 0 16px}
