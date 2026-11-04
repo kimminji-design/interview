@@ -221,47 +221,27 @@ function render() {
   $('copy-questions-btn').hidden=view!=='manage';$('bulk-btn').hidden=view!=='manage';
   if(view==='live') renderLive(); else if(view==='project') renderProjectSummary(); else renderList();
 }
-// Groups the shared "프로젝트" retrospective category into per-project sections for the read-only
-// 프로젝트 탭. A new section starts at "개요 · 역할 · 범위" or right after "경계 · 과장 금지선"
-// (the two recurring markers used across every project's note block). The overview answer itself
-// rarely names the project, so the label is inferred from distinctive terms anywhere in the group.
-function projectGroupLabel(groupText) {
-  if(/유니버설뱅킹|Core-Sub-Nudge/.test(groupText)) return '우리WON뱅킹';
-  if(/스크롤 내러티브|연혁\(Heritage\)|HD현대중공업|현대중공업/.test(groupText)) return 'HD현대중공업';
-  if(/카드 회전|상품 카드/.test(groupText)) return 'KB 모바일 브랜치';
-  if(/서브 업무 화면|다크\/라이트 모드/.test(groupText)) return 'KB 태블릿 브랜치';
-  return null;
-}
-function projectGroups(cat) {
-  const groups=[];let currentGroup=null;
-  cat.questions.forEach((q,i)=>{
-    const prev=cat.questions[i-1];
-    const startsNew=q.question.trim()==='개요 · 역할 · 범위'||(prev&&prev.question.trim()==='경계 · 과장 금지선');
-    if(startsNew||!currentGroup){currentGroup={isOverview:q.question.trim()==='개요 · 역할 · 범위',items:[]};groups.push(currentGroup);}
-    currentGroup.items.push(q);
-  });
-  groups.forEach((g,i)=>{
-    const text=g.items.map(q=>q.question+' '+q.answer).join(' ');
-    g.label=g.isOverview?(projectGroupLabel(text)||`프로젝트 ${i+1}`):'공통 패턴 · 보조 사례';
-  });
-  return groups;
+// Read-only 프로젝트 탭. 질문 관리 탭의 "프로젝트"(구 통합본) 또는 "프로젝트 · 기업명" 카테고리를
+// 그대로 모아 보여준다. 프로젝트별 구분은 카테고리 자체로 이미 되어 있으므로 여기서는 묻지 않는다.
+function projectCategories(company) {
+  return company.categories.filter(c=>(c.name==='프로젝트'||c.name.startsWith('프로젝트 · '))&&c.questions.length);
 }
 function renderProjectSummary() {
   const root=$('project-summary');root.replaceChildren();
   const company=current();
   if(!company){root.append(el('div','empty',''));root.lastChild.append(el('h2','','기업을 먼저 선택해주세요'));return;}
-  const cat=company.categories.find(c=>c.name==='프로젝트');
-  if(!cat||!cat.questions.length){
-    const empty=el('div','empty');empty.append(el('h2','','프로젝트 복기 내용이 없어요'),el('p','','질문 관리 탭의 "프로젝트" 카테고리에 내용을 추가해주세요.'));root.append(empty);return;
+  const cats=projectCategories(company);
+  if(!cats.length){
+    const empty=el('div','empty');empty.append(el('h2','','프로젝트 복기 내용이 없어요'),el('p','','질문 관리 탭의 "프로젝트 · 기업명" 카테고리에 내용을 추가해주세요.'));root.append(empty);return;
   }
-  root.append(el('p','muted','프로젝트별 복기 내용을 모아 다시 기억하고 연습하는 보기 전용 화면입니다. 내용 수정·추가는 질문 관리 탭의 "프로젝트" 카테고리에서 해주세요.'));
-  for(const group of projectGroups(cat)) {
-    const heading=el('div','project-group-heading');heading.append(el('h2','',group.label));root.append(heading);
-    group.items.forEach(q=>{
-      const card=el('article','project-card');card.append(el('h3','project-question',q.question));
+  root.append(el('p','muted','프로젝트별 복기 내용을 모아 다시 기억하고 연습하는 보기 전용 화면입니다. 내용 수정·추가는 질문 관리 탭의 "프로젝트 · 기업명" 카테고리에서 해주세요. 카드를 눌러 펼치고 접을 수 있어요.'));
+  for(const cat of cats) {
+    const heading=el('div','project-group-heading');heading.append(el('h2','',cat.name.replace(/^프로젝트\s*·\s*/,'')||cat.name));root.append(heading);
+    cat.questions.forEach(q=>{
+      const card=el('details','project-card'),summary=el('summary');summary.append(el('span','project-question',q.question));
       const body=el('div','project-answer-body');body.append(answerContent(q));
       const follows=followUpPanel(q);if(follows)body.append(follows);
-      card.append(body);root.append(card);
+      card.append(summary,body);root.append(card);
     });
   }
 }
