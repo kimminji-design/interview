@@ -79,6 +79,12 @@ $('mobile-menu-close').onclick=closeMobileTools;
 $('mobile-tools').addEventListener('cancel',e=>{e.preventDefault();closeMobileTools();});
 $('mobile-tools').addEventListener('close',closeMobileTools);
 matchMedia('(max-width:700px)').addEventListener('change',e=>{if(!e.matches)closeMobileTools();});
+function preparationNotesContent(record) {
+  if(!record.preparationNotes?.trim())return null;
+  const panel=el('details','prep-notes');
+  panel.append(el('summary','','복기 메모 · 확인사항'),el('p','',record.preparationNotes));
+  return panel;
+}
 function answerContent(record, parentId=record.id) {
   const fragment=document.createDocumentFragment(),node=el('p','answer');
   node.dataset.original=record.answer||'아직 답변이 없습니다.';
@@ -93,7 +99,9 @@ function answerContent(record, parentId=record.id) {
     saved.autoBreathing=check.checked;record.autoBreathing=check.checked;
     refresh();changed();
   };
-  fragment.append(control,node);return fragment;
+  fragment.append(control,node);
+  const notes=preparationNotesContent(record);if(notes)fragment.append(notes);
+  return fragment;
 }
 function breathingOption(enabled=true) {
   const label=el('label','answer-reading','호흡 줄바꿈');
@@ -234,12 +242,17 @@ function renderProjectSummary() {
   if(!cats.length){
     const empty=el('div','empty');empty.append(el('h2','','프로젝트 복기 내용이 없어요'),el('p','','질문 관리 탭의 "프로젝트 · 기업명" 카테고리에 내용을 추가해주세요.'));root.append(empty);return;
   }
-  root.append(el('p','muted','프로젝트별 복기 내용을 모아 다시 기억하고 연습하는 보기 전용 화면입니다. 내용 수정·추가는 질문 관리 탭의 "프로젝트 · 기업명" 카테고리에서 해주세요. 카드를 눌러 펼치고 접을 수 있어요.'));
+  root.append(el('p','muted','프로젝트 카드를 열어 소개와 상세 질문을 연습하세요. 키워드는 말할 순서이며, 꼬리질문과 복기 메모는 필요할 때 펼쳐볼 수 있어요. 수정은 질문 관리 탭에서 할 수 있습니다.'));
+  const keywordLabel=el('label','project-keyword-toggle','키워드만 보기'),keywordToggle=input();keywordToggle.type='checkbox';keywordToggle.checked=$('keyword-only').checked;
+  keywordToggle.onchange=()=>{$('keyword-only').checked=keywordToggle.checked;renderProjectSummary();};keywordLabel.prepend(keywordToggle);root.append(keywordLabel);
   for(const cat of cats) {
     const heading=el('div','project-group-heading');heading.append(el('h2','',cat.name.replace(/^프로젝트\s*·\s*/,'')||cat.name));root.append(heading);
     cat.questions.forEach(q=>{
       const card=el('details','project-card'),summary=el('summary');summary.append(el('span','project-question',q.question));
-      const body=el('div','project-answer-body');body.append(answerContent(q));
+      const body=el('div','project-answer-body');
+      if(q.keywords?.length){const chips=el('div','chips');q.keywords.forEach(k=>chips.append(el('span','chip',k)));body.append(chips);}
+      if(!$('keyword-only').checked)body.append(answerContent(q));
+      else{const notes=preparationNotesContent(q);if(notes)body.append(notes);if(!q.keywords?.length)body.append(el('p','muted','등록된 키워드가 없어요.'));}
       const follows=followUpPanel(q);if(follows)body.append(follows);
       card.append(summary,body);root.append(card);
     });
@@ -304,6 +317,9 @@ function editQuestion(id=null) {
   const category=field(row,'카테고리',input(existing?.cat.name||company.categories[0]?.name||'기본 질문'));category.setAttribute('list','editor-categories');const dl=el('datalist');dl.id='editor-categories';company.categories.forEach(c=>dl.append(option(c.name,c.name)));body.append(dl);
   const status=el('select');Object.entries(statuses).forEach(([k,v])=>status.append(option(k,v)));status.value=existing?.q.status||'draft';field(row,'준비 상태',status);
   const answer=el('textarea');answer.value=existing?.q.answer||'';answer.rows=11;field(body,'답변',answer);
+  const notesEditor=el('details','prep-notes');notesEditor.append(el('summary','','복기 메모 · 확인사항 편집'));
+  const preparationNotes=el('textarea');preparationNotes.value=existing?.q.preparationNotes||'';preparationNotes.rows=5;
+  field(notesEditor,'말할 답변과 별도로 기록할 사실관계·주의사항',preparationNotes);body.append(notesEditor);
   const breathing=breathingOption(existing?.q.autoBreathing!==false);body.append(breathing,el('p','reading-help','끄면 직접 입력한 줄바꿈 그대로 표시합니다.'));const autoBreathing=breathing.querySelector('input');
   const keywordInput=el('textarea','keywords-editor');keywordInput.value=(existing?.q.keywords||[]).join(' → ');keywordInput.rows=2;field(body,'기억할 키워드 / 말할 순서',keywordInput);
   body.append(el('p','muted','화살표(→), 쉼표 또는 줄바꿈으로 구분하세요. 추천은 답변에 실제 있는 문구만 찾으며 AI 요약은 아닙니다. 기존 키워드는 직접 바꾸기 전까지 유지됩니다.'));
@@ -323,6 +339,8 @@ function editQuestion(id=null) {
       const text=el('textarea','follow-textarea');text.rows=4;text.value=f.answer;field(row,`꼬리질문 ${i+1} 답변`,text);text.oninput=()=>f.answer=text.value;
       const breathing=breathingOption(f.autoBreathing!==false);breathing.querySelector('input').onchange=e=>{f.autoBreathing=e.target.checked;editorDirty=true;};row.append(breathing);
       const keys=field(row,`꼬리질문 ${i+1} 키워드 (선택)`,input((f.keywords||[]).join(' → ')));keys.oninput=()=>f.keywords=keys.value.split(/→|,|\n/).map(x=>x.trim()).filter(Boolean);
+      const notesPanel=el('details','prep-notes');notesPanel.append(el('summary','','복기 메모 편집 (선택)'));
+      const notes=el('textarea');notes.rows=3;notes.value=f.preparationNotes||'';field(notesPanel,'말할 답변과 별도인 메모',notes);notes.oninput=()=>{f.preparationNotes=notes.value;};row.append(notesPanel);
       followList.append(row);if(focusId===f.id)queueMicrotask(()=>title.focus());
     });
   }
@@ -336,6 +354,7 @@ function editQuestion(id=null) {
     if(followDraft.some(f=>!f.question.trim())){err.textContent='비어 있는 꼬리질문의 질문을 입력하거나 삭제해주세요.';followEditor.open=true;return;}
     let target=company.categories.find(c=>c.name===category.value.trim());if(!target){target={id:uid('cat'),name:category.value.trim(),questions:[]};company.categories.push(target);}
     const q={...(existing?clone(existing.q):{id:uid('q'),subcategory:null}),question:question.value.trim(),answer:answer.value.trim(),keywords:[...new Set(keywordInput.value.split(/→|,|\n/).map(x=>x.trim()).filter(Boolean))],favorite:favorite.checked,status:status.value,autoBreathing:autoBreathing.checked};
+    if(preparationNotes.value.trim())q.preparationNotes=preparationNotes.value.trim();else delete q.preparationNotes;
     if(followDraft.length||existing?.q.followUps)q.followUps=followDraft.map(f=>({...f,question:f.question.trim(),answer:f.answer.trim(),keywords:[...new Set(f.keywords||[])]}));
     if(existing&&existing.cat.id===target.id)existing.cat.questions[existing.cat.questions.findIndex(x=>x.id===id)]=q;
     else{if(existing)existing.cat.questions=existing.cat.questions.filter(x=>x.id!==id);target.questions.push(q);}
@@ -450,7 +469,7 @@ $('add-company-btn').onclick=()=>companyDialog();$('company-menu-btn').onclick=(
 $('add-question-btn').onclick=()=>editQuestion();$('category-btn').onclick=categoriesDialog;
 $('copy-questions-btn').onclick=copyQuestions;$('bulk-btn').onclick=bulkPaste;$('transfer-btn').onclick=transferDialog;
 $('settings-btn').onclick=settings;$('sync-btn').onclick=()=>runSync(true);$('refresh-btn').onclick=()=>runSync(false);
-$('search').oninput=renderList;$('category-filter').onchange=renderList;$('status-filter').onchange=renderList;$('keyword-only').onchange=renderList;
+$('search').oninput=renderList;$('category-filter').onchange=renderList;$('status-filter').onchange=renderList;$('keyword-only').onchange=()=>{if(view==='project')renderProjectSummary();else if(view==='live')renderLive();else renderList();};
 $('bulk-clear').onclick=()=>{selected.clear();renderList();};$('bulk-move').onclick=bulkMove;
 for(const [id,value]of[['bulk-star',true],['bulk-unstar',false]])$(id).onclick=()=>{selected.forEach(id=>{const loc=locate(id);if(loc)loc.q.favorite=value;});changed();render();};
 $('bulk-delete').onclick=()=>{if(!confirm(`선택한 ${selected.size}개 질문을 삭제할까요?`))return;backup('질문 삭제 전');current().categories.forEach(c=>c.questions=c.questions.filter(q=>!selected.has(q.id)));selected.clear();changed();render();};
@@ -485,3 +504,4 @@ async function start(){
 }
 $('gate-form').onsubmit=e=>{e.preventDefault();if($('gate-input').value.trim()==='1303'){sessionStorage.setItem('interviewGateUnlocked','1');$('gate-input').value='';start();}else{$('gate-error').textContent='비밀번호를 확인해주세요.';}};
 if(sessionStorage.getItem('interviewGateUnlocked')==='1')start();
+

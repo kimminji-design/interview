@@ -93,3 +93,11 @@ body.live-running{overflow:hidden}
 .project-answer-body{padding:0 22px 20px}
 .project-question{font-size:15px;font-weight:700;margin:0;flex:1}
 .project-answer-body .answer{margin:12px 0 16px}
+.prep-notes{margin:14px 0;border:1px solid var(--line);border-radius:8px;background:#f8fafc;padding:10px 12px;color:var(--muted);font-size:13px;line-height:1.65}
+.prep-notes>summary{cursor:pointer;font-weight:600}
+.prep-notes>p{white-space:pre-wrap;overflow-wrap:anywhere;margin:10px 0 0}
+.prep-notes .field{margin-top:10px}
+.project-answer-body>.chips{margin-bottom:12px}
+.project-keyword-toggle{display:flex;align-items:center;gap:8px;font-size:13px;margin:12px 0 20px}
+.project-keyword-toggle input{width:16px;height:16px}
+
