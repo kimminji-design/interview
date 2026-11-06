@@ -1,6 +1,6 @@
 import { breathingText, newestCompanies } from './reading.mjs?v=4';
 import { clone, uid, equal, count, flat, validate, documentOf, newCompany, mergeDocuments, move, suggestKeywords, parseBulk } from './core.mjs?v=3';
-import { GitHubSync, SEED_PATH } from './github-sync.mjs?v=3';
+import { GitHubSync, SEED_PATH } from './github-sync.mjs?v=4';
 import { CONNECTION_KEY, readConnection, saveConnection } from './connection.mjs?v=1';
 
 const $ = id => document.getElementById(id);
@@ -23,12 +23,20 @@ function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.
 function btn(text, action, cls = '') { const b = el('button', cls, text); b.type = 'button'; b.onclick = action; return b; }
 function option(value, text) { const o = el('option', '', text); o.value = value; return o; }
 function message(text) { $('toast').textContent = text; $('toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').hidden = true, 4500); }
+function syncStatus(type, text) {
+  $('sync-status').dataset.state = type; $('sync-status').textContent = text;
+  const menu = $('mobile-menu-btn');
+  menu.dataset.syncState = type;
+  menu.textContent = type === 'error' ? '기업 · 설정 · 연결 오류' : type === 'busy' ? '기업 · 설정 · 확인 중' : type === 'pending' ? '기업 · 설정 · 저장 대기' : '기업 · 설정';
+  menu.setAttribute('aria-label', `기업 및 설정. ${text}`);
+  if (type === 'error') message(text);
+}
 function orderedCompanies() { return newestCompanies(state.data.companies); }
 function current() { return state.data.companies.find(c => c.id === state.selected) || orderedCompanies()[0]; }
 function localSave() {
   if (staleTab || storageBroken) return false;
   try { state.revision++; localStorage.setItem(STORAGE, JSON.stringify(state)); return true; }
-  catch { storageBroken = true; $('sync-status').dataset.state = 'error'; $('sync-status').textContent = '이 기기에 저장할 수 없어요. 내보내기로 백업해주세요.'; return false; }
+  catch { storageBroken = true; syncStatus('error', '이 기기에 저장할 수 없어요. 내보내기로 백업해주세요.'); return false; }
 }
 function backup(reason) {
   state.backups = [{ date: new Date().toISOString(), reason, data: clone(state.data) }, ...state.backups].slice(0, 4);
@@ -37,7 +45,7 @@ function backup(reason) {
 function changed() {
   if (staleTab) { message('다른 탭에서 수정했어요. 새로고침 후 다시 편집해주세요.'); return; }
   localSave();
-  if (!storageBroken) { $('sync-status').dataset.state = 'pending'; $('sync-status').textContent = '이 기기에 저장됨 · GitHub 저장 대기'; }
+  if (!storageBroken) syncStatus('pending', '이 기기에 저장됨 · GitHub 저장 대기');
   clearTimeout(saveTimer);
   if (sync.token) saveTimer = setTimeout(() => runSync(true), 2200);
 }
@@ -119,18 +127,19 @@ const sync = new GitHubSync({
   setBase: value => { state.base = clone(value); localSave(); },
   apply: value => { if (!equal(value, state.data)) { backup('동기화 전'); state.data = clone(value); safeSelection(); localSave(); render(); } },
   resolve: resolveConflicts,
-  status: (type, text) => { $('sync-status').dataset.state = type; $('sync-status').textContent = text; },
+  status: syncStatus,
 });
 function connectionUI() {
   $('sync-btn').textContent = sync.token ? '지금 동기화' : 'GitHub 저장';
   $('settings-btn').textContent = sync.token ? '자동 저장 설정' : '연결 설정';
 }
-async function runSync(write = false) {
+async function runSync(write = false, notify = false) {
   if (staleTab) return message('다른 탭에서 변경했어요. 새로고침 후 동기화해주세요.');
   if (storageBroken) return message('브라우저 저장소를 확인하고 먼저 JSON을 내보내주세요.');
   if ($('dialog').open || sync.busy) { if (write && sync.token) { clearTimeout(saveTimer); saveTimer = setTimeout(() => runSync(true), 2500); } return; }
   if (write && !sync.token) return settings();
   const completed = await sync.sync(write);
+  if (notify && completed) message('GitHub 최신 내용을 확인했어요. 이 기기의 수정사항도 함께 유지됩니다.');
   if (completed && sync.token && !equal(state.data, state.base) && $('sync-status').dataset.state !== 'error') {
     clearTimeout(saveTimer); saveTimer = setTimeout(() => runSync(true), 2500);
   }
@@ -468,7 +477,7 @@ function renderLive(){
 $('add-company-btn').onclick=()=>companyDialog();$('company-menu-btn').onclick=()=>companyDialog(true);
 $('add-question-btn').onclick=()=>editQuestion();$('category-btn').onclick=categoriesDialog;
 $('copy-questions-btn').onclick=copyQuestions;$('bulk-btn').onclick=bulkPaste;$('transfer-btn').onclick=transferDialog;
-$('settings-btn').onclick=settings;$('sync-btn').onclick=()=>runSync(true);$('refresh-btn').onclick=()=>runSync(false);
+$('settings-btn').onclick=settings;$('sync-btn').onclick=()=>runSync(true);$('refresh-btn').onclick=()=>runSync(false, true);
 $('search').oninput=renderList;$('category-filter').onchange=renderList;$('status-filter').onchange=renderList;$('keyword-only').onchange=()=>{if(view==='project')renderProjectSummary();else if(view==='live')renderLive();else renderList();};
 $('bulk-clear').onclick=()=>{selected.clear();renderList();};$('bulk-move').onclick=bulkMove;
 for(const [id,value]of[['bulk-star',true],['bulk-unstar',false]])$(id).onclick=()=>{selected.forEach(id=>{const loc=locate(id);if(loc)loc.q.favorite=value;});changed();render();};
@@ -490,6 +499,7 @@ window.addEventListener('storage',e=>{
 function resumeSync(){if(!document.hidden&&!$('app').hidden&&!$('dialog').open&&!editorDirty&&view!=='live')runSync(!!sync.token);}
 document.addEventListener('visibilitychange',resumeSync);
 window.addEventListener('online',resumeSync);
+window.addEventListener('pageshow',event=>{if(event.persisted)resumeSync();});
 let started=false;
 async function start(){
   $('gate').hidden=true;$('app').hidden=false;render();if(started)return;started=true;
@@ -504,4 +514,5 @@ async function start(){
 }
 $('gate-form').onsubmit=e=>{e.preventDefault();if($('gate-input').value.trim()==='1303'){sessionStorage.setItem('interviewGateUnlocked','1');$('gate-input').value='';start();}else{$('gate-error').textContent='비밀번호를 확인해주세요.';}};
 if(sessionStorage.getItem('interviewGateUnlocked')==='1')start();
+
 

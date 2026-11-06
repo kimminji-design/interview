@@ -21,6 +21,9 @@
 .follow-edit-row .field{margin-top:12px}.follow-textarea{min-height:110px;font-size:14px}
 @media(max-width:700px){.follow-hint{display:none}.follow-ups>summary{min-height:48px}.follow-answer{padding-left:8px}.follow-edit-row{padding:12px}.follow-editor{padding-left:10px;padding-right:10px}}
 /* Reading mode: source answers stay editable; line breaks are presentation only. */
+.mobile-menu-btn[data-sync-state="error"]{border-color:#b42333;color:#b42333;background:#fff5f5}
+.mobile-menu-btn[data-sync-state="pending"]{border-color:#b78830}
+#mobile-tools-body #sync-status{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.6}
 .answer{word-break:keep-all;overflow-wrap:break-word}
 .reading-options{display:flex;justify-content:flex-end;margin:-8px 0 16px;color:var(--muted);font-size:12px}
 .mobile-menu-btn{display:none}
@@ -100,4 +103,5 @@ body.live-running{overflow:hidden}
 .project-answer-body>.chips{margin-bottom:12px}
 .project-keyword-toggle{display:flex;align-items:center;gap:8px;font-size:13px;margin:12px 0 20px}
 .project-keyword-toggle input{width:16px;height:16px}
+
 

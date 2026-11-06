@@ -17,12 +17,19 @@ export class GitHubSync {
   }
   connect(token) { this.token = token.trim(); }
   disconnect() { this.token = ''; }
+  async fetchWithTimeout(url, options = {}) {
+    // AbortSignal.timeout is unavailable in some older mobile browsers.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    try { return await this.fetcher(url, { ...options, signal: controller.signal }); }
+    finally { clearTimeout(timer); }
+  }
   async request(method = 'GET', body, path = DATA_PATH) {
     const headers = { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
     if (this.token) headers.Authorization = `Bearer ${this.token}`;
     if (body) headers['Content-Type'] = 'application/json';
-    const response = await this.fetcher(ENDPOINT + path + (method === 'GET' ? '?ref=main' : ''), {
-      method, headers, cache: 'no-store', ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(20000),
+    const response = await this.fetchWithTimeout(ENDPOINT + path + (method === 'GET' ? '?ref=main' : ''), {
+      method, headers, cache: 'no-store', ...(body ? { body: JSON.stringify(body) } : {}),
     });
     if (response.status === 404 && method === 'GET' && path === DATA_PATH) return { missing: true };
     if (!response.ok) {
@@ -30,6 +37,25 @@ export class GitHubSync {
       throw new Error(messages[response.status] || `GitHub 연결 실패 (${response.status})`);
     }
     return response.json();
+  }
+  async readRemote(write) {
+    try {
+      let response = await this.request();
+      const missing = !!response.missing;
+      if (missing) response = await this.request('GET', undefined, SEED_PATH);
+      const remote = documentOf(validate(JSON.parse(utf8decode(response.content))).companies);
+      return { remote, response, missing };
+    } catch (error) {
+      // Never save against a stale/missing SHA or fall back during a write.
+      if (write && this.token) throw error;
+      this.status('busy', '공개 데이터에서 최신 내용 확인 중…');
+      const response = await this.fetchWithTimeout(`https://raw.githubusercontent.com/${REPO}/main/${DATA_PATH}?t=${Date.now()}`, {
+        method: 'GET', cache: 'no-store', credentials: 'omit',
+      });
+      if (!response.ok) throw new Error('GitHub 최신 내용을 받지 못했어요. 네트워크를 확인하고 다시 시도해주세요.');
+      const remote = documentOf(validate(await response.json()).companies);
+      return { remote, response: {}, missing: false };
+    }
   }
   async reconcile(base, local, remote) {
     if (!base) {
@@ -43,10 +69,7 @@ export class GitHubSync {
     if (this.busy) return false;
     this.busy = true; this.status('busy', '최신 내용 확인 중…');
     try {
-      let response = await this.request();
-      const missing = !!response.missing;
-      if (missing) response = await this.request('GET', undefined, SEED_PATH);
-      const remote = documentOf(validate(JSON.parse(utf8decode(response.content))).companies);
+      const { remote, response, missing } = await this.readRemote(write);
       const local = clone(this.getLocal());
       const merged = await this.reconcile(this.getBase(), local, remote);
       if (!merged) { this.status('pending', '선택을 취소했어요. 이 기기의 내용은 유지됩니다.'); return false; }
@@ -67,8 +90,9 @@ export class GitHubSync {
       this.status(equal(this.getLocal(), merged) ? 'saved' : 'pending', equal(this.getLocal(), merged) ? 'GitHub 저장 완료' : '새 수정사항 저장 대기');
       return true;
     } catch (error) {
-      this.status('error', `${error.name === 'TimeoutError' ? '연결 시간이 초과됐어요.' : error.message} 수정본은 이 기기에 유지됩니다.`);
+      this.status('error', `${['TimeoutError', 'AbortError'].includes(error.name) ? '연결 시간이 초과됐어요.' : error.message} 수정본은 이 기기에 유지됩니다.`);
       return false;
     } finally { this.busy = false; }
   }
 }
+
